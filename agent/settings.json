@@ -1,0 +1,10 @@
+{
+  "lastChangelogVersion": "0.57.1",
+  "defaultProvider": "github-copilot",
+  "defaultModel": "gpt-5.4",
+  "defaultThinkingLevel": "medium",
+  "packages": ["npm:pi-terminal-theme", "npm:pi-web-access"],
+  "hideThinkingBlock": false,
+  "theme": "terminal"
+}
+
