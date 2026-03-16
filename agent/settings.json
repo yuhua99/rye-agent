@@ -1,10 +1,9 @@
 {
   "lastChangelogVersion": "0.57.1",
   "defaultProvider": "github-copilot",
-  "defaultModel": "gpt-5.4",
+  "defaultModel": "claude-sonnet-4.6",
   "defaultThinkingLevel": "medium",
-  "packages": ["npm:pi-terminal-theme", "npm:pi-web-access"],
+  "packages": ["npm:pi-terminal-theme", "npm:@benvargas/pi-exa-mcp"],
   "hideThinkingBlock": false,
   "theme": "terminal"
 }
-
