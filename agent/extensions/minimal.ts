@@ -1,6 +1,5 @@
 import type {
 	BashToolDetails,
-	EditToolDetails,
 	ExtensionAPI,
 	FindToolDetails,
 	GrepToolDetails,
@@ -9,18 +8,12 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
-	createEditTool,
 	createFindTool,
 	createGrepTool,
 	createLsTool,
 	createReadTool,
-	createWriteTool,
 } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
-import { execFileSync } from "node:child_process";
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
 import { homedir } from "os";
 
 function shortenPath(path: string): string {
@@ -40,62 +33,10 @@ function formatKvArgs(args: Array<[string, unknown]>): string {
 	return parts.length ? ` [${parts.join(", ")}]` : "";
 }
 
-function renderDiff(theme: any, diff: string, maxLines: number = 40): Text {
-	const diffLines = diff.split("\n");
-	let added = 0;
-	let removed = 0;
-	for (const line of diffLines) {
-		if (line.startsWith("+") && !line.startsWith("+++")) added++;
-		if (line.startsWith("-") && !line.startsWith("---")) removed++;
-	}
-
-	const visibleDiffLines = diffLines.slice(0, maxLines).map((line) => {
-		if (line.startsWith("+") && !line.startsWith("+++")) return theme.fg("toolDiffAdded", line);
-		if (line.startsWith("-") && !line.startsWith("---")) return theme.fg("toolDiffRemoved", line);
-		return theme.fg("toolDiffContext", line);
-	});
-
-	let text = theme.fg("success", `+${added}`) + theme.fg("dim", " / ") + theme.fg("error", `-${removed}`);
-	text += "\n" + visibleDiffLines.join("\n");
-	if (diffLines.length > maxLines) {
-		text += "\n" + theme.fg("muted", `... ${diffLines.length - maxLines} more diff lines`);
-	}
-	return new Text(text, 0, 0);
-}
-
-async function createUnifiedDiff(path: string, before: string, after: string): Promise<string | undefined> {
-	if (before === after) return undefined;
-
-	const id = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-	const beforePath = join(tmpdir(), `pi-minimal-before-${id}`);
-	const afterPath = join(tmpdir(), `pi-minimal-after-${id}`);
-
-	try {
-		await writeFile(beforePath, before, "utf8");
-		await writeFile(afterPath, after, "utf8");
-		try {
-			const output = execFileSync("diff", ["-u", "--label", `${path} (before)`, "--label", `${path} (after)`, beforePath, afterPath], {
-				encoding: "utf8",
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-			return output;
-		} catch (error: any) {
-			if (typeof error?.stdout === "string" && error.stdout.length > 0) {
-				return error.stdout;
-			}
-			return undefined;
-		}
-	} finally {
-		await Promise.allSettled([rm(beforePath, { force: true }), rm(afterPath, { force: true })]);
-	}
-}
-
 export default function (pi: ExtensionAPI) {
 	const cwd = process.cwd();
 	const readTool = createReadTool(cwd);
 	const bashTool = createBashTool(cwd);
-	const editTool = createEditTool(cwd);
-	const writeTool = createWriteTool(cwd);
 	const findTool = createFindTool(cwd);
 	const grepTool = createGrepTool(cwd);
 	const lsTool = createLsTool(cwd);
@@ -174,74 +115,6 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerTool({
-		name: "edit",
-		label: "edit",
-		description: editTool.description,
-		parameters: editTool.parameters,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			return createEditTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
-		},
-		renderCall(args, theme) {
-			let text = arrow(theme, "Edit ");
-			text += theme.fg("accent", shortenPath(args.path));
-			text += theme.fg("muted", formatKvArgs([["edits", args.edits?.length]]));
-			return new Text(text, 0, 0);
-		},
-		renderResult(result, { isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "Editing..."), 0, 0);
-			const details = result.details as EditToolDetails | undefined;
-			const content = result.content[0];
-			if (content?.type === "text" && /^Error/i.test(content.text)) {
-				return new Text(theme.fg("error", content.text), 0, 0);
-			}
-			if (!details?.diff) {
-				return new Text(theme.fg("success", "Updated"), 0, 0);
-			}
-			return renderDiff(theme, details.diff, 40);
-		},
-	});
-
-	pi.registerTool({
-		name: "write",
-		label: "write",
-		description: writeTool.description,
-		parameters: writeTool.parameters,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const absolutePath = resolve(ctx.cwd, params.path);
-			let before = "";
-			try {
-				before = await readFile(absolutePath, "utf8");
-			} catch {
-				before = "";
-			}
-
-			const result = await createWriteTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
-			const diff = await createUnifiedDiff(params.path, before, params.content);
-			return {
-				...result,
-				details: diff ? { diff } : result.details,
-			};
-		},
-		renderCall(args, theme) {
-			let text = arrow(theme, "Write ");
-			text += theme.fg("accent", shortenPath(args.path));
-			text += theme.fg("muted", formatKvArgs([["lines", args.content?.split("\n").length]]));
-			return new Text(text, 0, 0);
-		},
-		renderResult(result, { isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "Writing..."), 0, 0);
-			const content = result.content[0];
-			if (content?.type === "text" && /^Error/i.test(content.text)) {
-				return new Text(theme.fg("error", content.text), 0, 0);
-			}
-			const details = result.details as { diff?: string } | undefined;
-			if (details?.diff) {
-				return renderDiff(theme, details.diff, 40);
-			}
-			return new Text(theme.fg("success", "Written"), 0, 0);
-		},
-	});
 
 	pi.registerTool({
 		name: "find",

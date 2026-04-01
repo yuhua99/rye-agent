@@ -3,6 +3,8 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "medium",
-  "packages": [],
+  "packages": [
+    "npm:@heyhuynhgiabuu/pi-diff"
+  ],
   "quietStartup": true
 }
