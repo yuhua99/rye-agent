@@ -4,5 +4,6 @@
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "medium",
   "packages": [],
-  "hideThinkingBlock": false
+  "hideThinkingBlock": false,
+  "quietStartup": true
 }
