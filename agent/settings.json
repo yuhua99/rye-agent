@@ -6,5 +6,6 @@
   "packages": [
     "npm:@heyhuynhgiabuu/pi-diff"
   ],
-  "quietStartup": true
+  "quietStartup": true,
+  "hideThinkingBlock": false
 }
