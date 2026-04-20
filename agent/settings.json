@@ -1,10 +1,11 @@
 {
-  "lastChangelogVersion": "0.64.0",
+  "lastChangelogVersion": "0.67.68",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "medium",
   "packages": [
-    "npm:@heyhuynhgiabuu/pi-diff"
+    "npm:@heyhuynhgiabuu/pi-diff",
+    "git:github.com/sherif-fanous/pi-rtk"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false
