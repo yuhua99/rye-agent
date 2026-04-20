@@ -1,5 +1,4 @@
 import type {
-	BashToolDetails,
 	ExtensionAPI,
 	FindToolDetails,
 	GrepToolDetails,
@@ -7,7 +6,6 @@ import type {
 	ReadToolDetails,
 } from "@mariozechner/pi-coding-agent";
 import {
-	createBashTool,
 	createFindTool,
 	createGrepTool,
 	createLsTool,
@@ -36,7 +34,6 @@ function formatKvArgs(args: Array<[string, unknown]>): string {
 export default function (pi: ExtensionAPI) {
 	const cwd = process.cwd();
 	const readTool = createReadTool(cwd);
-	const bashTool = createBashTool(cwd);
 	const findTool = createFindTool(cwd);
 	const grepTool = createGrepTool(cwd);
 	const lsTool = createLsTool(cwd);
@@ -83,38 +80,6 @@ export default function (pi: ExtensionAPI) {
 			return new Text(text, 0, 0);
 		},
 	});
-
-	pi.registerTool({
-		name: "bash",
-		label: "bash",
-		description: bashTool.description,
-		parameters: bashTool.parameters,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			return createBashTool(ctx.cwd).execute(toolCallId, params, signal, onUpdate);
-		},
-		renderCall(args, theme) {
-			let text = arrow(theme, "Bash ");
-			text += theme.fg("accent", args.command);
-			text += theme.fg("muted", formatKvArgs([["timeout", args.timeout]]));
-			return new Text(text, 0, 0);
-		},
-		renderResult(result, { expanded, isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "Running..."), 0, 0);
-			if (!expanded) return new Text("", 0, 0);
-			const content = result.content[0];
-			const details = result.details as BashToolDetails | undefined;
-			const output = content?.type === "text" ? content.text : "";
-			let text = theme.fg("dim", `${output.split("\n").filter((line) => line.trim().length > 0).length} output lines`);
-			if (details?.truncation?.truncated) {
-				text += theme.fg("warning", " • truncated");
-			}
-			if (output) {
-				text += "\n" + theme.fg("toolOutput", output);
-			}
-			return new Text(text, 0, 0);
-		},
-	});
-
 
 	pi.registerTool({
 		name: "find",
