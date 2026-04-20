@@ -1,4 +1,5 @@
 agent/auth.json
-agent/sessions
-agent/git
+agent/sessions/
+agent/git/
+agent/bin/
 agent/caveman.json
