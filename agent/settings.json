@@ -1,13 +1,13 @@
 {
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
+  "lastChangelogVersion": "0.69.0",
+  "defaultProvider": "github-copilot",
+  "defaultModel": "claude-sonnet-4.6",
   "defaultThinkingLevel": "medium",
   "packages": [
     "npm:@heyhuynhgiabuu/pi-diff",
     "git:github.com/sherif-fanous/pi-rtk",
     "npm:@siddr/pi-fetch-url",
-    "git:github.com/jonjonrankin/pi-caveman",
-    "git:github.com/leblancfg/pi-ansi-themes"
+    "git:github.com/jonjonrankin/pi-caveman"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
