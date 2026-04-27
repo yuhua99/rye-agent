@@ -1,0 +1,48 @@
+{
+  "providers": {
+    "opencode-go": {
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro",
+          "api": "openai-completions",
+          "baseUrl": "https://opencode.ai/zen/go/v1",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 3.45,
+            "output": 8.55,
+            "cacheRead": 1.72,
+            "cacheWrite": 17.15
+          },
+          "contextWindow": 1048576,
+          "maxTokens": 16384,
+          "compat": {
+            "thinkingFormat": "deepseek",
+            "requiresReasoningContentOnAssistantMessages": true
+          }
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "name": "DeepSeek V4 Flash",
+          "api": "openai-completions",
+          "baseUrl": "https://opencode.ai/zen/go/v1",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 31.65,
+            "output": 79.05,
+            "cacheRead": 15.82,
+            "cacheWrite": 158.15
+          },
+          "contextWindow": 1048576,
+          "maxTokens": 16384,
+          "compat": {
+            "thinkingFormat": "deepseek",
+            "requiresReasoningContentOnAssistantMessages": true
+          }
+        }
+      ]
+    }
+  }
+}
