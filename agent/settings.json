@@ -7,10 +7,10 @@
     "npm:@heyhuynhgiabuu/pi-diff",
     "git:github.com/sherif-fanous/pi-rtk",
     "npm:@siddr/pi-fetch-url",
-    "git:github.com/jonjonrankin/pi-caveman",
-    "npm:pi-fzf"
+    "git:github.com/jonjonrankin/pi-caveman"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
   "theme": "ansi-dark"
 }
+
