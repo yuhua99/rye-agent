@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.70.2",
+  "lastChangelogVersion": "0.70.5",
   "defaultProvider": "opencode-go",
   "defaultModel": "deepseek-v4-pro",
   "defaultThinkingLevel": "medium",
@@ -13,4 +13,3 @@
   "hideThinkingBlock": false,
   "theme": "ansi-dark"
 }
-
