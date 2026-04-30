@@ -1,11 +1,10 @@
 {
-  "lastChangelogVersion": "0.70.5",
+  "lastChangelogVersion": "0.70.6",
   "defaultProvider": "opencode-go",
   "defaultModel": "deepseek-v4-pro",
   "defaultThinkingLevel": "medium",
   "packages": [
     "npm:@heyhuynhgiabuu/pi-diff",
-    "git:github.com/sherif-fanous/pi-rtk",
     "git:github.com/jonjonrankin/pi-caveman"
   ],
   "quietStartup": true,
