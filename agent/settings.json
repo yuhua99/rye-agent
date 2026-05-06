@@ -1,10 +1,9 @@
 {
-  "lastChangelogVersion": "0.70.6",
+  "lastChangelogVersion": "0.73.0",
   "defaultProvider": "opencode-go",
-  "defaultModel": "deepseek-v4-pro",
+  "defaultModel": "mimo-v2.5-pro",
   "defaultThinkingLevel": "medium",
   "packages": [
-    "npm:@heyhuynhgiabuu/pi-diff",
     "git:github.com/jonjonrankin/pi-caveman"
   ],
   "quietStartup": true,
