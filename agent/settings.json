@@ -2,9 +2,10 @@
   "lastChangelogVersion": "0.74.0",
   "defaultProvider": "opencode-go",
   "defaultModel": "kimi-k2.6",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "packages": [
-    "git:github.com/jonjonrankin/pi-caveman"
+    "git:github.com/jonjonrankin/pi-caveman",
+    "git:github.com/earendil-works/pi-review"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
