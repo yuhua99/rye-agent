@@ -1,11 +1,12 @@
 {
   "lastChangelogVersion": "0.74.0",
   "defaultProvider": "opencode-go",
-  "defaultModel": "kimi-k2.6",
+  "defaultModel": "deepseek-v4-pro",
   "defaultThinkingLevel": "high",
   "packages": [
     "git:github.com/jonjonrankin/pi-caveman",
-    "git:github.com/earendil-works/pi-review"
+    "git:github.com/earendil-works/pi-review",
+    "npm:@siddr/pi-fetch-url"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
