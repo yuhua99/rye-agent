@@ -1,9 +1,10 @@
 ---
 name: scout
 description: 'Local codebase reconnaissance for locating files, flows, patterns, and conventions in the current repo.'
-tools: read, bash, grep, find, ls, write
-model: openai/gpt-5.4-mini
-thinking: high
+tools: all
+deny-tools: edit,write,subagent,subagent_kill,subagent_resume
+model: xai-auth/grok-build
+thinking: medium
 mode: background
 auto-exit: true
 session-mode: fork
