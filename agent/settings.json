@@ -1,12 +1,12 @@
 {
-  "lastChangelogVersion": "0.74.0",
-  "defaultProvider": "opencode-go",
-  "defaultModel": "deepseek-v4-pro",
-  "defaultThinkingLevel": "high",
+  "lastChangelogVersion": "0.76.0",
+  "defaultProvider": "xai-auth",
+  "defaultModel": "grok-build",
+  "defaultThinkingLevel": "medium",
   "packages": [
-    "git:github.com/jonjonrankin/pi-caveman",
     "git:github.com/earendil-works/pi-review",
-    "npm:@siddr/pi-fetch-url"
+    "npm:@siddr/pi-fetch-url",
+    "git:github.com/edxeth/pi-subagents"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
