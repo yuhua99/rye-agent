@@ -56,6 +56,16 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Review Before Handoff
+
+**Use the reviewer subagent as an independent check after code changes.**
+
+- After modifying code, launch the `reviewer` subagent to review your diff before final handoff when the change is non-trivial.
+- Before committing or preparing a commit, launch the `reviewer` subagent to review the exact changes intended for commit.
+- Treat reviewer findings as actionable: fix valid findings, then re-run relevant verification. If you disagree, explain why.
+- Do not ask the reviewer to implement fixes; keep review and implementation separate.
+- Skip reviewer only for trivial one-line/docs-only edits where review overhead clearly exceeds value, and mention that you skipped it.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
