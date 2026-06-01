@@ -3,7 +3,7 @@ name: implementer
 description: Implement features, fix bugs, and make code changes according to precise specifications. Edits files, writes new code, runs tests and verification commands.
 tools: all
 spawning: false
-model: xai-auth/grok-build
+model: open-ai/gpt-5.4-mini
 thinking: high
 mode: background
 auto-exit: true
