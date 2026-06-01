@@ -3,7 +3,7 @@ name: general
 description: General purpose subagent with all tools but no spawning capability.
 tools: all
 spawning: false
-model: open-ai/gpt-5.4-mini
+model: openai/gpt-5.4-mini
 thinking: medium
 mode: background
 auto-exit: true
