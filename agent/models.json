@@ -10,7 +10,7 @@
       },
       "models": [
         {
-          "id": "claude-haiku-4-5-20251001",
+          "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "reasoning": true,
           "input": ["text", "image"],
