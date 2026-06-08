@@ -29,15 +29,13 @@ Before implementing:
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## 3. Surgical Changes
+## 3. Fix It Everywhere
 
-**Touch only what you must. Clean up only your own mess.**
+**When you find a problem, hunt for the same problem across the codebase and fix all occurrences at once.**
 
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+- When fixing a bug or pattern issue, search for the same problem in other files/modules.
+- If the same issue exists elsewhere, fix them all in one pass — don't leave known broken code behind.
+- Match existing style in each location, even if it varies across files.
 
 When your changes create orphans:
 - Remove imports/variables/functions that YOUR changes made unused.
@@ -45,15 +43,24 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-## 4. Review Before Handoff
+## 4. Delegation
 
-**Use the reviewer subagent as an independent check after code changes.**
+**Main agent is the orchestrator: understand requirements, decompose work, dispatch, and integrate results.**
 
-- After modifying code, launch the `reviewer` subagent to review your diff before final handoff when the change is non-trivial.
-- Before committing or preparing a commit, launch the `reviewer` subagent to review the exact changes intended for commit.
-- Treat reviewer findings as actionable: fix valid findings, then re-run relevant verification. If you disagree, explain why.
-- Do not ask the reviewer to implement fixes; keep review and implementation separate.
-- Skip reviewer only for trivial one-line/docs-only edits where review overhead clearly exceeds value, and mention that you skipped it.
+When to delegate:
+- If the task is complex, involves multiple steps/files, or the session will be a long conversation — break it into small, independent work units and delegate to the appropriate subagent.
+- Each delegated task should have clear completion criteria and be self-contained.
+- Don't over-split: the right granularity is "one independent work unit with a clear done state", not the smallest possible action.
+- When you need to explore or locate code and aren't certain which file holds it, delegate to `scout` instead of reading/grepping in the main agent — keep search noise out of the main context.
+
+When NOT to delegate:
+- Simple, one-shot tasks where the conversation ends right after — just do it directly.
+- Requirement clarification phase — stay in main agent to go back and forth with the user. Delegate only after the requirements are clear.
+
+Review:
+- After subagent code changes, launch the `reviewer` subagent to review the diff before handoff.
+- Treat reviewer findings as actionable: fix valid findings, then re-run verification. If you disagree, explain why.
+- Skip review only for trivial one-line/docs-only edits, and mention that you skipped it.
 
 ---
 
