@@ -5,7 +5,7 @@
   "defaultThinkingLevel": "medium",
   "packages": [
     "npm:@siddr/pi-fetch-url",
-    "git:github.com/yuhua99/pi-subagents"
+    "git:github.com/yuhua99/pi-subagent"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
