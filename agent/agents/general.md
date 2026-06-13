@@ -2,7 +2,7 @@
 name: general
 description: General purpose subagent with all built-in tools except spawning/delegation.
 tools: read, bash, edit, write, grep, find, ls
-model: openai-codex/gpt-5.4-mini
+model: sub2api/claude-opus-4-8
 thinking: medium
 ---
 
