@@ -6,6 +6,7 @@
 - Do NOT explain or summarize your code changes unless asked.
 - NEVER add comments in code unless asked.
 - Use the fewest tool calls necessary. Batch independent reads/greps/globs in a single message.
+- This rule does NOT apply to delegation: never bundle work into one subagent call just to save tool calls.
 
 ## 1. Think Before Coding
 
@@ -49,8 +50,13 @@ The test: Every changed line should trace directly to the user's request.
 
 When to delegate:
 - If the task is complex, involves multiple steps/files, or the session will be a long conversation — break it into small, independent work units and delegate to the appropriate subagent.
+- **One delegation = one work unit.** Never forward the user's entire task to a single implementer. If your task description contains multiple deliverables ("do A, then B, then C"), that is multiple delegations, not one.
+- Independent units → dispatch in parallel mode. Dependent units → dispatch sequentially, feeding each result into the next task's spec. Sequential round-trips are expected and fine.
 - Each delegated task should have clear completion criteria and be self-contained.
-- Don't over-split: the right granularity is "one independent work unit with a clear done state", not the smallest possible action.
+- Example: "add an export feature" → delegate separately: (1) implement `exportToCsv(rows): string` in `src/export.ts`, (2) add the export button in `Toolbar.tsx` calling it, (3) add tests for `exportToCsv`. Not one delegation containing all three.
+- For coding tasks, delegate atomic, fully-specified units — not vague features. Spell out the exact deliverable: what to create/change (e.g., function/component name, location), its inputs/outputs or interface contract, and expected behavior. Prefer "implement function X in file Y taking A, returning B" over "implement feature Z".
+- All design decisions belong to the orchestrator: the implementer should only execute the spec, never have to guess scope, interfaces, or architecture.
+- Don't over-split: the right granularity is "one independent work unit with a clear done state", not the smallest possible action. A "work unit" is one cohesive change (one function/component/fix), never a whole feature — "the whole task has a done state" is not a reason to bundle it.
 - When you need to explore or locate code and aren't certain which file holds it, delegate to `scout` instead of reading/grepping in the main agent — keep search noise out of the main context.
 
 When NOT to delegate:
