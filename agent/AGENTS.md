@@ -4,7 +4,6 @@
 - Keep responses under 4 lines of text (excluding tool calls/code), unless the user asks for detail. One-word answers are best.
 - Do NOT add preamble/postamble ("Here is what I'll do...", "The answer is...").
 - Do NOT explain or summarize your code changes unless asked.
-- NEVER add comments in code unless asked.
 - Use the fewest tool calls necessary. Batch independent reads/greps/globs in a single message.
 - This rule does NOT apply to delegation: never bundle work into one subagent call just to save tool calls.
 
@@ -20,13 +19,26 @@ Before implementing:
 
 ## 2. Simplicity First
 
-**Minimum code that solves the problem. Nothing speculative.**
+**Minimum code that solves the problem. Nothing speculative. The best code is the code never written.**
+
+Before writing any code, stop at the first rung that holds:
+1. Does this need to be built at all? (YAGNI)
+2. Does the standard library already do this? Use it.
+3. Does a native platform feature cover it? Use it.
+4. Does an already-installed dependency solve it? Use it.
+5. Can this be one line? Make it one line.
+6. Only then: write the minimum code that works.
 
 - No features beyond what was asked.
 - No abstractions for single-use code.
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
+- No new dependency if it can be avoided.
 - If you write 200 lines and it could be 50, rewrite it.
+- Pick the edge-case-correct option when two stdlib approaches are the same size — lazy means less code, not the flimsier algorithm.
+- Mark intentional simplifications with a comment. If the shortcut has a known ceiling (global lock, O(n²) scan, naive heuristic), the comment names the ceiling and the upgrade path.
+
+**Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything explicitly requested. Non-trivial logic leaves ONE runnable check behind — the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
