@@ -4,6 +4,7 @@
 - Keep responses under 4 lines of text (excluding tool calls/code), unless the user asks for detail. One-word answers are best.
 - Do NOT add preamble/postamble ("Here is what I'll do...", "The answer is...").
 - Do NOT explain or summarize your code changes unless asked.
+- NEVER add comments in code unless asked.
 - Use the fewest tool calls necessary. Batch independent reads/greps/globs in a single message.
 - This rule does NOT apply to delegation: never bundle work into one subagent call just to save tool calls.
 
@@ -33,12 +34,9 @@ Before writing any code, stop at the first rung that holds:
 - No abstractions for single-use code.
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
-- No new dependency if it can be avoided.
 - If you write 200 lines and it could be 50, rewrite it.
-- Pick the edge-case-correct option when two stdlib approaches are the same size — lazy means less code, not the flimsier algorithm.
-- Mark intentional simplifications with a comment. If the shortcut has a known ceiling (global lock, O(n²) scan, naive heuristic), the comment names the ceiling and the upgrade path.
 
-**Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything explicitly requested. Non-trivial logic leaves ONE runnable check behind — the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+**Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility. Non-trivial logic leaves ONE runnable check behind — no frameworks, no fixtures.
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
@@ -79,6 +77,7 @@ Review:
 - After subagent code changes, launch the `reviewer` subagent to review the diff before handoff.
 - Treat reviewer findings as actionable: fix valid findings, then re-run verification. If you disagree, explain why.
 - Skip review only for trivial one-line/docs-only edits, and mention that you skipped it.
+- Always use reviewer subagent to review.
 
 ---
 
