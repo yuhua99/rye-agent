@@ -2,7 +2,7 @@
 name: reviewer
 description: Code review specialist for finding actionable correctness, security, performance, and maintainability issues in diffs or snapshots.
 tools: read, bash, grep, find, ls
-model: openai-codex/gpt-5.5
+model: sub2api/claude-opus-4-7
 thinking: medium
 ---
 

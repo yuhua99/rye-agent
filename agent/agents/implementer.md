@@ -2,7 +2,7 @@
 name: implementer
 description: Implement features, fix bugs, and make code changes according to precise specifications. Edits files, writes new code, runs tests and verification commands.
 tools: read, bash, edit, write, grep, find, ls
-model: openai-codex/gpt-5.5
+model: sub2api/claude-opus-4-7
 thinking: medium
 ---
 

@@ -34,6 +34,14 @@
           "maxTokens": 64000
         },
         {
+          "id": "claude-opus-4-7",
+          "name": "Claude Opus 4.7",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 1000000,
+          "maxTokens": 64000
+        },
+        {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "reasoning": true,
