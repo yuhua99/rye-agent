@@ -1,5 +1,11 @@
 {
   "providers": {
+    "nvidia": {
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "api": "openai-completions",
+      "apiKey": "",
+      "authHeader": true
+    },
     "sub2api": {
       "baseUrl": "http://127.0.0.1:8765",
       "api": "anthropic-messages",
@@ -26,12 +32,20 @@
           "maxTokens": 64000
         },
         {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 1000000,
+          "maxTokens": 128000
+        },
+        {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "reasoning": true,
           "input": ["text", "image"],
           "contextWindow": 1000000,
-          "maxTokens": 64000
+          "maxTokens": 128000
         },
         {
           "id": "claude-opus-4-7",
@@ -39,7 +53,7 @@
           "reasoning": true,
           "input": ["text", "image"],
           "contextWindow": 1000000,
-          "maxTokens": 64000
+          "maxTokens": 128000
         },
         {
           "id": "claude-opus-4-8",

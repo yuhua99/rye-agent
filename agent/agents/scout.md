@@ -2,7 +2,7 @@
 name: scout
 description: Local codebase reconnaissance for locating files, flows, patterns, and conventions in the current repo.
 tools: read, bash, grep, find, ls, write
-model: openai-codex/gpt-5.4-mini
+model: sub2api/claude-sonnet-5
 thinking: medium
 ---
 
