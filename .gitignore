@@ -3,4 +3,5 @@ agent/sessions/
 agent/git/
 agent/npm/
 agent/bin/
-agent/caveman.json
+agent/trust.json
+artifacts
