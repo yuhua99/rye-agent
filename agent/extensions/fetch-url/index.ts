@@ -245,7 +245,6 @@ export default function (pi: ExtensionAPI) {
 		promptSnippet: "Fetch a URL and return extracted markdown, HTML, or raw content.",
 		parameters: fetchUrlSchema,
 		renderCall: (args, theme, context) => {
-			const format = args.raw ? "raw" : args.format ?? "markdown";
 			const url = args.url ?? "(missing url)";
 			const status = context.state.status as string | undefined;
 			const symbol = symbolFor(status, theme);
@@ -254,8 +253,7 @@ export default function (pi: ExtensionAPI) {
 			if (status === "error" && context.state.err) {
 				callLine += `  ${theme.fg("error", context.state.err as string)}`;
 			}
-			const lines = [callLine, theme.fg("muted", `Format: ${format}`)];
-			return new Text(lines.join("\n"), 0, 0);
+			return new Text(callLine, 0, 0);
 		},
 		renderResult: (result, { isPartial }, _theme, context) => {
 			const details = result.details as FetchUrlDetails | undefined;
