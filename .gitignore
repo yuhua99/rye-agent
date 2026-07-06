@@ -2,6 +2,7 @@ agent/auth.json
 agent/sessions/
 agent/git/
 agent/npm/
+agent/extensions/*/node_modules/
 agent/bin/
 agent/trust.json
 artifacts

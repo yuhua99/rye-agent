@@ -1,11 +1,10 @@
 {
-  "lastChangelogVersion": "0.78.0",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
+  "lastChangelogVersion": "0.80.3",
+  "defaultProvider": "sub2api",
+  "defaultModel": "claude-fable-5",
   "defaultThinkingLevel": "medium",
   "packages": [
-    "npm:@siddr/pi-fetch-url",
-    "git:github.com/yuhua99/pi-subagent"
+    "../../playground/proj/ai-related/pi-subagent"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,

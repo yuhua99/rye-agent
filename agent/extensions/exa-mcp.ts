@@ -33,10 +33,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { StringEnum } from "@mariozechner/pi-ai";
+import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } from "@earendil-works/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	truncateHead,
+	type TruncationResult,
+} from "@earendil-works/pi-coding-agent";
+import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 // =============================================================================
@@ -89,15 +95,7 @@ interface McpToolDetails {
 	tool: string;
 	endpoint: string;
 	truncated: boolean;
-	truncation?: {
-		truncatedBy: "lines" | "bytes" | null;
-		totalLines: number;
-		totalBytes: number;
-		outputLines: number;
-		outputBytes: number;
-		maxLines: number;
-		maxBytes: number;
-	};
+	truncation?: Omit<TruncationResult, "content" | "truncated" | "lastLinePartial" | "firstLineExceedsLimit">;
 	tempFile?: string;
 }
 
@@ -180,21 +178,21 @@ function formatToolOutput(
 			text;
 	}
 
+	const {
+		content: _content,
+		truncated: _truncated,
+		lastLinePartial: _lastLinePartial,
+		firstLineExceedsLimit: _firstLineExceedsLimit,
+		...truncationDetails
+	} = truncation;
+
 	return {
 		text,
 		details: {
 			tool: toolName,
 			endpoint,
 			truncated: truncation.truncated,
-			truncation: {
-				truncatedBy: truncation.truncatedBy,
-				totalLines: truncation.totalLines,
-				totalBytes: truncation.totalBytes,
-				outputLines: truncation.outputLines,
-				outputBytes: truncation.outputBytes,
-				maxLines: truncation.maxLines,
-				maxBytes: truncation.maxBytes,
-			},
+			truncation: truncationDetails,
 			tempFile,
 		},
 	};
@@ -257,8 +255,14 @@ function splitParams(params: Record<string, unknown>): {
 	};
 }
 
-function arrow(theme: any, label: string): string {
-	return theme.fg("toolTitle", "→ ") + theme.fg("toolTitle", theme.bold(label));
+function statusPrefix(theme: any, status: string | undefined): string {
+	if (status === "ok") return theme.fg("success", "✓ ");
+	if (status === "error") return theme.fg("error", "✗ ");
+	return theme.fg("dim", "· ");
+}
+
+function arrow(theme: any, label: string, status?: string): string {
+	return statusPrefix(theme, status) + theme.fg("toolTitle", theme.bold(label));
 }
 
 function formatKvArgs(args: Array<[string, unknown]>): string {
@@ -277,25 +281,39 @@ function summarizeQuery(args: Record<string, unknown>): string {
 }
 
 function renderMinimalResult(
-	result: { content?: Array<{ type?: string; text?: string }>; details?: unknown },
-	options: { expanded?: boolean; isPartial?: boolean },
-	theme: any,
-	pendingLabel: string,
+	result: { content?: Array<{ type?: string; text?: string }>; details?: unknown; isError?: boolean },
+	options: { isPartial?: boolean; isError?: boolean },
+	_theme: any,
+	context?: { state?: any; invalidate?: () => void },
 ) {
-	if (options.isPartial) return new Text(theme.fg("warning", pendingLabel), 0, 0);
-	if (!options.expanded) return new Text("", 0, 0);
-
 	const content = Array.isArray(result.content) ? result.content.find((item) => item?.type === "text" && typeof item.text === "string") : undefined;
 	const output = typeof content?.text === "string" ? content.text : "";
-	if (!output) return new Text("", 0, 0);
-
 	const details = result.details as McpToolDetails | McpErrorDetails | undefined;
-	let text = theme.fg("dim", `${output.split("\n").length} lines`);
-	if (details && "truncated" in details && details.truncated) {
-		text += theme.fg("warning", " • truncated");
+	const hasErrorField = !!(details && typeof details === "object" && "error" in details && (details as McpErrorDetails).error);
+	const isError = result.isError === true || options.isError === true || hasErrorField || output.startsWith("Exa MCP error");
+
+	let status: "running" | "ok" | "error";
+	let err: string | undefined;
+	if (options.isPartial) {
+		status = "running";
+	} else if (isError) {
+		status = "error";
+		const firstLine = (output.split("\n")[0] ?? "").trim();
+		const msg = `error: ${firstLine}`;
+		err = msg.length > 80 ? msg.slice(0, 77) + "..." : msg;
+	} else {
+		status = "ok";
 	}
-	text += "\n" + theme.fg("toolOutput", output);
-	return new Text(text, 0, 0);
+
+	if (context?.state) {
+		if (context.state.status !== status || context.state.err !== err) {
+			context.state.status = status;
+			context.state.err = err;
+			context.invalidate?.();
+		}
+	}
+
+	return new Container();
 }
 
 function resolveEffectiveLimits(
@@ -742,18 +760,6 @@ const codeContextParams = Type.Object(
 // Extension Entry Point
 // =============================================================================
 
-export {
-	parseTimeoutMs,
-	normalizeNumber,
-	normalizeTools,
-	parseToolsFromUrl,
-	splitParams,
-	resolveEffectiveLimits,
-	resolveEndpoint,
-	ensureDefaultConfigFile,
-	DEFAULT_CONFIG_FILE,
-};
-
 export default function exaMcp(pi: ExtensionAPI) {
 	// Register CLI flags
 	pi.registerFlag("--exa-mcp-url", {
@@ -789,6 +795,15 @@ export default function exaMcp(pi: ExtensionAPI) {
 		type: "string",
 	});
 
+	let cachedConfig: ExaMcpConfig | null | undefined;
+	const getConfig = (): ExaMcpConfig | null => {
+		if (cachedConfig === undefined) {
+			const configFlag = pi.getFlag("--exa-mcp-config");
+			cachedConfig = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
+		}
+		return cachedConfig;
+	};
+
 	const getConfiguredTools = (): string[] | undefined => {
 		const toolsFlag = pi.getFlag("--exa-mcp-tools");
 		if (typeof toolsFlag === "string") {
@@ -797,24 +812,20 @@ export default function exaMcp(pi: ExtensionAPI) {
 		if (process.env.EXA_MCP_TOOLS) {
 			return normalizeTools(process.env.EXA_MCP_TOOLS);
 		}
-		const configFlag = pi.getFlag("--exa-mcp-config");
-		const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
-		return config?.tools;
+		return getConfig()?.tools;
 	};
 
 	const getBaseUrl = (): string => {
-		const configFlag = pi.getFlag("--exa-mcp-config");
-		const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
-
 		const urlFlag = pi.getFlag("--exa-mcp-url");
-		return typeof urlFlag === "string" ? urlFlag : (process.env.EXA_MCP_URL ?? config?.url ?? DEFAULT_ENDPOINT);
+		return typeof urlFlag === "string"
+			? urlFlag
+			: (process.env.EXA_MCP_URL ?? getConfig()?.url ?? DEFAULT_ENDPOINT);
 	};
 
 	const getMaxLimits = (): { maxBytes: number; maxLines: number } => {
 		const maxBytesFlag = pi.getFlag("--exa-mcp-max-bytes");
 		const maxLinesFlag = pi.getFlag("--exa-mcp-max-lines");
-		const configFlag = pi.getFlag("--exa-mcp-config");
-		const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
+		const config = getConfig();
 
 		const maxBytes =
 			typeof maxBytesFlag === "string"
@@ -833,9 +844,6 @@ export default function exaMcp(pi: ExtensionAPI) {
 
 	const client = new ExaMcpClient(
 		() => {
-			const configFlag = pi.getFlag("--exa-mcp-config");
-			const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
-
 			const urlFlag = pi.getFlag("--exa-mcp-url");
 			const apiKeyFlag = pi.getFlag("--exa-mcp-api-key");
 
@@ -843,21 +851,17 @@ export default function exaMcp(pi: ExtensionAPI) {
 			const apiKey =
 				typeof apiKeyFlag === "string"
 					? apiKeyFlag
-					: (process.env.EXA_API_KEY ?? process.env.EXA_MCP_API_KEY ?? config?.apiKey ?? undefined);
+					: (process.env.EXA_API_KEY ?? process.env.EXA_MCP_API_KEY ?? getConfig()?.apiKey ?? undefined);
 
 			return resolveEndpoint(baseUrl, getConfiguredTools(), apiKey);
 		},
 		() => {
-			const configFlag = pi.getFlag("--exa-mcp-config");
-			const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
 			const timeoutFlag = pi.getFlag("--exa-mcp-timeout-ms");
 			const timeoutValue =
-				typeof timeoutFlag === "string" ? timeoutFlag : (process.env.EXA_MCP_TIMEOUT_MS ?? config?.timeoutMs);
+				typeof timeoutFlag === "string" ? timeoutFlag : (process.env.EXA_MCP_TIMEOUT_MS ?? getConfig()?.timeoutMs);
 			return parseTimeoutMs(timeoutValue, DEFAULT_TIMEOUT_MS);
 		},
 		() => {
-			const configFlag = pi.getFlag("--exa-mcp-config");
-			const config = loadConfig(typeof configFlag === "string" ? configFlag : undefined);
 			const protocolFlag = pi.getFlag("--exa-mcp-protocol");
 			if (typeof protocolFlag === "string" && protocolFlag.trim().length > 0) {
 				return protocolFlag.trim();
@@ -866,10 +870,7 @@ export default function exaMcp(pi: ExtensionAPI) {
 			if (envVersion && envVersion.trim().length > 0) {
 				return envVersion.trim();
 			}
-			if (config?.protocolVersion) {
-				return config.protocolVersion;
-			}
-			return DEFAULT_PROTOCOL_VERSION;
+			return getConfig()?.protocolVersion ?? DEFAULT_PROTOCOL_VERSION;
 		},
 	);
 
@@ -884,67 +885,41 @@ export default function exaMcp(pi: ExtensionAPI) {
 	}
 	const allowedTools = allowedToolList ? new Set(allowedToolList) : null;
 
-	// Register web_search_exa tool
-	if (!allowedTools || allowedTools.has("web_search_exa")) {
-		pi.registerTool({
+	const toolSpecs: Array<{
+		name: string;
+		label: string;
+		description: string;
+		parameters: typeof webSearchParams | typeof codeContextParams;
+		kvArgs: (args: Record<string, unknown>) => Array<[string, unknown]>;
+	}> = [
+		{
 			name: "web_search_exa",
 			label: "Exa Web Search",
 			description:
 				"Real-time web search via Exa; best for up-to-date info. Client-side truncation; override with piMaxBytes/piMaxLines (clamped by config).",
 			parameters: webSearchParams,
-			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-				if (signal?.aborted) {
-					return { content: [{ type: "text", text: "Cancelled." }], details: { cancelled: true } };
-				}
-				onUpdate?.({ content: [{ type: "text", text: "Querying Exa MCP..." }], details: { status: "pending" } });
-
-				try {
-					const endpoint = redactEndpoint(client.currentEndpoint());
-					const { mcpArgs, requestedLimits } = splitParams(params as Record<string, unknown>);
-					const maxLimits = getMaxLimits();
-					const effectiveLimits = resolveEffectiveLimits(requestedLimits, maxLimits);
-					const result = await client.callTool("web_search_exa", mcpArgs, signal);
-					const { text, details } = formatToolOutput("web_search_exa", endpoint, result, effectiveLimits);
-					return { content: [{ type: "text", text }], details, isError: result.isError === true };
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					return {
-						content: [{ type: "text", text: `Exa MCP error: ${message}` }],
-						isError: true,
-						details: {
-							tool: "web_search_exa",
-							endpoint: redactEndpoint(client.currentEndpoint()),
-							error: message,
-						} satisfies McpErrorDetails,
-					};
-				}
-			},
-			renderCall(args, theme) {
-				let text = arrow(theme, "web_search_exa ");
-				text += theme.fg("accent", summarizeQuery(args as Record<string, unknown>));
-				text += theme.fg(
-					"muted",
-					formatKvArgs([
-						["numResults", (args as Record<string, unknown>).numResults],
-						["type", (args as Record<string, unknown>).type],
-					]),
-				);
-				return new Text(text, 0, 0);
-			},
-			renderResult(result, options, theme) {
-				return renderMinimalResult(result, options, theme, "Searching web...");
-			},
-		});
-	}
-
-	// Register get_code_context_exa tool
-	if (!allowedTools || allowedTools.has("get_code_context_exa")) {
-		pi.registerTool({
+			kvArgs: (args) => [
+				["numResults", args.numResults],
+				["type", args.type],
+			],
+		},
+		{
 			name: "get_code_context_exa",
 			label: "Exa Code Context",
 			description:
 				"Search code/docs via Exa; best for API usage/examples. Client-side truncation; override with piMaxBytes/piMaxLines (clamped by config).",
 			parameters: codeContextParams,
+			kvArgs: (args) => [["tokensNum", args.tokensNum]],
+		},
+	];
+
+	for (const spec of toolSpecs) {
+		if (allowedTools && !allowedTools.has(spec.name)) continue;
+		pi.registerTool({
+			name: spec.name,
+			label: spec.label,
+			description: spec.description,
+			parameters: spec.parameters,
 			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
 				if (signal?.aborted) {
 					return { content: [{ type: "text", text: "Cancelled." }], details: { cancelled: true } };
@@ -954,10 +929,9 @@ export default function exaMcp(pi: ExtensionAPI) {
 				try {
 					const endpoint = redactEndpoint(client.currentEndpoint());
 					const { mcpArgs, requestedLimits } = splitParams(params as Record<string, unknown>);
-					const maxLimits = getMaxLimits();
-					const effectiveLimits = resolveEffectiveLimits(requestedLimits, maxLimits);
-					const result = await client.callTool("get_code_context_exa", mcpArgs, signal);
-					const { text, details } = formatToolOutput("get_code_context_exa", endpoint, result, effectiveLimits);
+					const effectiveLimits = resolveEffectiveLimits(requestedLimits, getMaxLimits());
+					const result = await client.callTool(spec.name, mcpArgs, signal);
+					const { text, details } = formatToolOutput(spec.name, endpoint, result, effectiveLimits);
 					return { content: [{ type: "text", text }], details, isError: result.isError === true };
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
@@ -965,26 +939,25 @@ export default function exaMcp(pi: ExtensionAPI) {
 						content: [{ type: "text", text: `Exa MCP error: ${message}` }],
 						isError: true,
 						details: {
-							tool: "get_code_context_exa",
+							tool: spec.name,
 							endpoint: redactEndpoint(client.currentEndpoint()),
 							error: message,
 						} satisfies McpErrorDetails,
 					};
 				}
 			},
-			renderCall(args, theme) {
-				let text = arrow(theme, "get_code_context_exa ");
+			renderCall(args, theme, context) {
+				const status = context?.state?.status as string | undefined;
+				let text = arrow(theme, `${spec.name} `, status);
 				text += theme.fg("accent", summarizeQuery(args as Record<string, unknown>));
-				text += theme.fg(
-					"muted",
-					formatKvArgs([
-						["tokensNum", (args as Record<string, unknown>).tokensNum],
-					]),
-				);
+				text += theme.fg("muted", formatKvArgs(spec.kvArgs(args as Record<string, unknown>)));
+				if (status === "error" && context?.state?.err) {
+					text += "  " + theme.fg("error", context.state.err);
+				}
 				return new Text(text, 0, 0);
 			},
-			renderResult(result, options, theme) {
-				return renderMinimalResult(result, options, theme, "Searching code...");
+			renderResult(result, options, theme, context) {
+				return renderMinimalResult(result, options, theme, context);
 			},
 		});
 	}
