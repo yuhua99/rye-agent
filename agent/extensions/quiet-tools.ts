@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createBashToolDefinition,
+	createEditToolDefinition,
 	createFindToolDefinition,
 	createGrepToolDefinition,
 	createLsToolDefinition,
@@ -70,6 +71,12 @@ function makeCallBody(toolName: string, args: any, theme: Theme): string {
 			const p = typeof args?.path === "string" ? args.path : "";
 			return dim("write ") + accent(truncate(p));
 		}
+		case "edit": {
+			const p = typeof args?.path === "string" ? args.path : "";
+			const n = Array.isArray(args?.edits) ? args.edits.length : 0;
+			const extra = n > 0 ? ` (${n} edit${n === 1 ? "" : "s"})` : "";
+			return dim("edit ") + accent(truncate(p)) + (extra ? dim(extra) : "");
+		}
 		case "grep": {
 			const pat = typeof args?.pattern === "string" ? args.pattern : "";
 			let extra = "";
@@ -135,6 +142,7 @@ export default function (pi: ExtensionAPI) {
 		{ name: "bash", create: createBashToolDefinition },
 		{ name: "read", create: createReadToolDefinition },
 		{ name: "write", create: createWriteToolDefinition },
+		{ name: "edit", create: createEditToolDefinition },
 		{ name: "grep", create: createGrepToolDefinition },
 		{ name: "find", create: createFindToolDefinition },
 		{ name: "ls", create: createLsToolDefinition },
