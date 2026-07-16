@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createBashToolDefinition,
@@ -19,6 +20,23 @@ type Status = "running" | "ok" | "error";
 type State = { status?: Status; err?: string };
 
 const MAX = 80;
+const BATCHABLE = new Set(["read", "grep", "find", "ls"]);
+
+type Member = {
+	id: string;
+	name: string;
+	args: any;
+	messageSeq: number;
+	batchable: boolean;
+	invalidate?: () => void;
+	status?: Status;
+	err?: string;
+};
+
+const members = new Map<string, Member>();
+const order: string[] = [];
+let messageSeq = 0;
+let refreshing = false;
 
 function truncate(s: string, n = MAX): string {
 	if (s.length <= n) return s;
@@ -35,18 +53,34 @@ function firstTextContent(result: any): string {
 	return c?.type === "text" ? c.text : "";
 }
 
-function symbolFor(state: State, theme: Theme): string {
-	if (state.status === "ok") return theme.fg("success", "✓");
-	if (state.status === "error") return theme.fg("error", "✗");
+function symbolFor(status: Status | undefined, theme: Theme): string {
+	if (status === "ok") return theme.fg("success", "✓");
+	if (status === "error") return theme.fg("error", "✗");
 	return theme.fg("dim", "·");
 }
 
-function callLine(symbol: string, body: string, state: State, theme: Theme): string {
+function callLine(symbol: string, body: string, status: Status | undefined, err: string | undefined, theme: Theme): string {
 	let line = `${symbol} ${body}`;
-	if (state.status === "error" && state.err) {
-		line += "  " + theme.fg("error", state.err);
+	if (status === "error" && err) {
+		line += "  " + theme.fg("error", err);
 	}
 	return line;
+}
+
+function primaryLabel(toolName: string, args: any): string {
+	switch (toolName) {
+		case "read":
+		case "write":
+		case "edit":
+			return typeof args?.path === "string" ? args.path : "";
+		case "ls":
+			return typeof args?.path === "string" && args.path ? args.path : ".";
+		case "grep":
+		case "find":
+			return typeof args?.pattern === "string" ? args.pattern : "";
+		default:
+			return toolName;
+	}
 }
 
 function makeCallBody(toolName: string, args: any, theme: Theme): string {
@@ -98,6 +132,110 @@ function makeCallBody(toolName: string, args: any, theme: Theme): string {
 	}
 }
 
+function isTerminal(status: Status | undefined): boolean {
+	return status === "ok" || status === "error";
+}
+
+function ensureMember(
+	toolName: string,
+	args: any,
+	context: { toolCallId: string; invalidate: () => void },
+	batchable: boolean,
+): Member {
+	const id = context.toolCallId;
+	const existing = members.get(id);
+	if (existing) {
+		existing.args = args;
+		existing.invalidate = context.invalidate;
+		return existing;
+	}
+
+	const lastId = order[order.length - 1];
+	const last = lastId ? members.get(lastId) : undefined;
+	if (batchable && last?.batchable && last.name === toolName && isTerminal(last.status)) {
+		messageSeq++;
+	}
+
+	const member: Member = {
+		id,
+		name: toolName,
+		args,
+		messageSeq,
+		batchable,
+		invalidate: context.invalidate,
+	};
+	members.set(id, member);
+	order.push(id);
+	return member;
+}
+
+function sameStreak(a: Member, b: Member): boolean {
+	return a.batchable && b.batchable && a.name === b.name && a.messageSeq === b.messageSeq;
+}
+
+function streakOf(id: string): Member[] {
+	const self = members.get(id);
+	if (!self || !self.batchable) return self ? [self] : [];
+	const idx = order.indexOf(id);
+	if (idx < 0) return [self];
+
+	let start = idx;
+	while (start > 0) {
+		const prev = members.get(order[start - 1]);
+		if (!prev || !sameStreak(prev, self)) break;
+		start--;
+	}
+	let end = idx;
+	while (end + 1 < order.length) {
+		const next = members.get(order[end + 1]);
+		if (!next || !sameStreak(next, self)) break;
+		end++;
+	}
+	const out: Member[] = [];
+	for (let i = start; i <= end; i++) {
+		const m = members.get(order[i]);
+		if (m) out.push(m);
+	}
+	return out;
+}
+
+function streakStatus(streak: Member[]): Status | undefined {
+	if (streak.some((m) => !m.status || m.status === "running")) return "running";
+	if (streak.some((m) => m.status === "error")) return "error";
+	if (streak.every((m) => m.status === "ok")) return "ok";
+	return undefined;
+}
+
+function lastNonError(streak: Member[]): Member | undefined {
+	for (let i = streak.length - 1; i >= 0; i--) {
+		if (streak[i].status !== "error") return streak[i];
+	}
+	return undefined;
+}
+
+function summaryBody(toolName: string, streak: Member[], theme: Theme): string {
+	const dim = (s: string) => theme.fg("dim", s);
+	const accent = (s: string) => theme.fg("accent", s);
+	const labels = streak
+		.map((m) => primaryLabel(toolName, m.args))
+		.filter(Boolean)
+		.map((label) => (toolName === "read" || toolName === "ls" ? basename(label) : label));
+	const joined = truncate(labels.join(", "), MAX);
+	return dim(`${toolName} ×${streak.length} `) + accent(joined);
+}
+
+function refreshStreak(id: string): void {
+	if (refreshing) return;
+	refreshing = true;
+	try {
+		for (const m of streakOf(id)) {
+			if (m.id !== id) m.invalidate?.();
+		}
+	} finally {
+		refreshing = false;
+	}
+}
+
 function computeStatus(
 	result: any,
 	opts: { expanded: boolean; isPartial: boolean },
@@ -115,28 +253,68 @@ function computeStatus(
 function makeRenderCall(toolName: string): RenderCall {
 	return (args, theme, context) => {
 		const state = context.state as State;
-		const symbol = symbolFor(state, theme);
-		const body = makeCallBody(toolName, args, theme);
-		return new Text(callLine(symbol, body, state, theme), 0, 0);
+		const batchable = BATCHABLE.has(toolName);
+		const member = ensureMember(toolName, args, context, batchable);
+		if (state.status) {
+			member.status = state.status;
+			member.err = state.err;
+		}
+
+		if (!batchable) {
+			const symbol = symbolFor(state.status, theme);
+			const body = makeCallBody(toolName, args, theme);
+			return new Text(callLine(symbol, body, state.status, state.err, theme), 1, 0);
+		}
+
+		const streak = streakOf(member.id);
+		const summaryHost = lastNonError(streak);
+		const visible = member.status === "error" || member.id === summaryHost?.id;
+
+		refreshStreak(member.id);
+
+		if (!visible) return new Text("", 0, 0);
+
+		if (member.status === "error") {
+			const symbol = symbolFor("error", theme);
+			const body = makeCallBody(toolName, args, theme);
+			return new Text(callLine(symbol, body, "error", member.err, theme), 1, 0);
+		}
+
+		const okStreak = streak.filter((m) => m.status !== "error");
+		const status = okStreak.length > 1 ? streakStatus(okStreak) : member.status;
+		const symbol = symbolFor(status, theme);
+		const body =
+			okStreak.length > 1 ? summaryBody(toolName, okStreak, theme) : makeCallBody(toolName, args, theme);
+		return new Text(callLine(symbol, body, status, undefined, theme), 1, 0);
 	};
 }
 
-// context.state is a free-form per-tool-call scratch object shared between
-// renderCall and renderResult; we store our own { status, err } shape in it.
 const renderResult: RenderResult = (result, opts, _theme, context) => {
 	const state = context.state as State;
 	const next = computeStatus(result, opts, context);
-	if (state.status !== next.status || state.err !== next.err) {
+	const changed = state.status !== next.status || state.err !== next.err;
+	if (changed) {
 		state.status = next.status;
 		state.err = next.err;
-		context.invalidate?.();
 	}
 
+	const member = members.get(context.toolCallId);
+	if (member) {
+		member.status = next.status;
+		member.err = next.err;
+		if (changed) refreshStreak(member.id);
+	}
+
+	if (changed) context.invalidate?.();
 	return new Container();
 };
 
 export default function (pi: ExtensionAPI) {
 	const cwd = process.cwd();
+
+	pi.on("message_start", (event) => {
+		if (event.message.role === "assistant") messageSeq++;
+	});
 
 	const factories = [
 		{ name: "bash", create: createBashToolDefinition },
@@ -152,6 +330,7 @@ export default function (pi: ExtensionAPI) {
 		const original = create(cwd);
 		pi.registerTool({
 			...original,
+			renderShell: "self",
 			renderCall: makeRenderCall(name),
 			renderResult,
 		} as any);
