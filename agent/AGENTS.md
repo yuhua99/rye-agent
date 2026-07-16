@@ -4,9 +4,9 @@
 - Keep responses under 4 lines of text (excluding tool calls/code), unless the user asks for detail. One-word answers are best.
 - Do NOT add preamble/postamble ("Here is what I'll do...", "The answer is...").
 - Do NOT explain or summarize your code changes unless asked.
-- NEVER add comments in code unless asked.
+- Do not add comments, docstrings, TODOs, or explanatory annotations unless explicitly requested or required by existing repository tooling.
+- Do not remove existing comments unless your change makes them incorrect.
 - Use the fewest tool calls necessary. Batch independent reads/greps/globs in a single message.
-- This rule does NOT apply to delegation: never bundle work into one subagent call just to save tool calls.
 
 ## 1. Think Before Coding
 
@@ -27,16 +27,18 @@ Before writing any code, stop at the first rung that holds:
 2. Does the standard library already do this? Use it.
 3. Does a native platform feature cover it? Use it.
 4. Does an already-installed dependency solve it? Use it.
-5. Can this be one line? Make it one line.
+5. Can this be one direct expression? Start there.
 6. Only then: write the minimum code that works.
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
+- Start with the direct happy-path implementation.
+- No features, flexibility, or configurability beyond what was asked.
+- Add branches, helpers, abstractions, validation, fallbacks, retries, or catches only for a concrete requirement.
+- Do not handle hypothetical failures. Each handled case must come from a documented contract, trust boundary, repository convention, failing test, or reported bug.
+- At trust boundaries, validate assumptions required by current behavior, security policy, or downstream contracts; do not validate unrelated possibilities.
+- Catch errors only to recover, translate them into a required domain error, or add actionable context. Never catch merely to log and rethrow or return an undocumented or silent default.
 - If you write 200 lines and it could be 50, rewrite it.
 
-**Not lazy about:** input validation at trust boundaries, error handling that prevents data loss, security, accessibility. Non-trivial logic leaves ONE runnable check behind — no frameworks, no fixtures.
+**Not lazy about:** error handling that prevents data loss, security, accessibility. Non-trivial logic leaves ONE runnable check behind — no frameworks, no fixtures.
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
@@ -53,32 +55,3 @@ When your changes create orphans:
 - Don't remove pre-existing dead code unless asked.
 
 The test: Every changed line should trace directly to the user's request.
-
-## 4. Delegation
-
-**Main agent is the orchestrator: understand requirements, decompose work, dispatch, and integrate results.**
-
-When to delegate:
-- If the task is complex, involves multiple steps/files, or the session will be a long conversation — break it into small, independent work units and delegate to the appropriate subagent.
-- **One delegation = one work unit.** Never forward the user's entire task to a single implementer. If your task description contains multiple deliverables ("do A, then B, then C"), that is multiple delegations, not one.
-- Independent units → dispatch in parallel mode. Dependent units → dispatch sequentially, feeding each result into the next task's spec. Sequential round-trips are expected and fine.
-- Each delegated task should have clear completion criteria and be self-contained.
-- Example: "add an export feature" → delegate separately: (1) implement `exportToCsv(rows): string` in `src/export.ts`, (2) add the export button in `Toolbar.tsx` calling it, (3) add tests for `exportToCsv`. Not one delegation containing all three.
-- For coding tasks, delegate atomic, fully-specified units — not vague features. Spell out the exact deliverable: what to create/change (e.g., function/component name, location), its inputs/outputs or interface contract, and expected behavior. Prefer "implement function X in file Y taking A, returning B" over "implement feature Z".
-- All design decisions belong to the orchestrator: the implementer should only execute the spec, never have to guess scope, interfaces, or architecture.
-- Don't over-split: the right granularity is "one independent work unit with a clear done state", not the smallest possible action. A "work unit" is one cohesive change (one function/component/fix), never a whole feature — "the whole task has a done state" is not a reason to bundle it.
-- When you need to explore or locate code and aren't certain which file holds it, delegate to `scout` instead of reading/grepping in the main agent — keep search noise out of the main context.
-
-When NOT to delegate:
-- Simple, one-shot tasks where the conversation ends right after — just do it directly.
-- Requirement clarification phase — stay in main agent to go back and forth with the user. Delegate only after the requirements are clear.
-
-Review:
-- After subagent code changes, launch the `reviewer` subagent to review the diff before handoff.
-- Treat reviewer findings as actionable: fix valid findings, then re-run verification. If you disagree, explain why.
-- Skip review only for trivial one-line/docs-only edits, and mention that you skipped it.
-- Always use reviewer subagent to review.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
