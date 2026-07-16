@@ -116,7 +116,10 @@ if [[ -n "${1:-}" ]]; then
 	exit 0
 fi
 
-mapfile -t panes < <(prune_queue)
+panes=()
+while IFS= read -r _p; do
+	[[ -n $_p ]] && panes+=("$_p")
+done < <(prune_queue)
 n=${#panes[@]}
 
 if ((n == 0)); then
