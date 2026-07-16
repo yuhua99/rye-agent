@@ -1,15 +1,9 @@
 {
   "providers": {
-    "nvidia": {
-      "baseUrl": "https://integrate.api.nvidia.com/v1",
-      "api": "openai-completions",
-      "apiKey": "",
-      "authHeader": true
-    },
-    "sub2api": {
-      "baseUrl": "http://127.0.0.1:8765",
+    "anthropic": {
+      "baseUrl": "$SUB2API_BASE_URL",
       "api": "anthropic-messages",
-      "apiKey": "",
+      "apiKey": "$SUB2API_API_KEY",
       "authHeader": true,
       "compat": {
         "forceAdaptiveThinking": true
@@ -21,14 +15,6 @@
           "reasoning": true,
           "input": ["text", "image"],
           "contextWindow": 200000,
-          "maxTokens": 64000
-        },
-        {
-          "id": "claude-sonnet-4-6",
-          "name": "Claude Sonnet 4.6",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 1000000,
           "maxTokens": 64000
         },
         {
