@@ -35,6 +35,7 @@ const turndownService = new TurndownService({
 	codeBlockStyle: "fenced",
 	headingStyle: "atx",
 });
+turndownService.remove(["style", "script", "noscript"]);
 
 function normalizeText(value: string | null | undefined): string | undefined {
 	const trimmed = value?.trim();
@@ -135,6 +136,8 @@ export function pickBestContentNode(
 	document: Document,
 	selectors: string[] = DEFAULT_MAIN_CONTENT_SELECTORS,
 ): { html: string; text: string; selector: string } | null {
+	for (const el of document.querySelectorAll("style, script, noscript, svg, template")) el.remove();
+
 	let best: { html: string; text: string; length: number; selector: string } | null = null;
 
 	for (const selector of selectors) {

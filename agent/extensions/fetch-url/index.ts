@@ -1,10 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	formatSize,
-	truncateHead,
-} from "@earendil-works/pi-coding-agent";
+import { formatSize, truncateHead } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import { randomBytes } from "node:crypto";
@@ -61,7 +56,9 @@ type FetchUrlDetails = {
 };
 
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-const MAX_ERROR_BODY_BYTES = 16 * 1024;
+const MAX_ERROR_BODY_BYTES = 4 * 1024;
+const MAX_OUTPUT_LINES = 500;
+const MAX_OUTPUT_BYTES = 16 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
 
@@ -302,7 +299,7 @@ export default function (pi: ExtensionAPI) {
 				const errorBody = (await readBodyCapped(response, MAX_ERROR_BODY_BYTES))
 					.replace(/[\u0000-\u001f\u007f]+/g, " ")
 					.trim();
-				const suffix = errorBody ? `: ${errorBody.slice(0, 2000)}` : "";
+				const suffix = errorBody ? `: ${errorBody.slice(0, 300)}` : "";
 				throw new Error(`Request failed (${response.status} ${response.statusText})${suffix}`);
 			}
 
@@ -344,8 +341,8 @@ export default function (pi: ExtensionAPI) {
 				? `${metadataBlock}\n\n${outputContent}`
 				: metadataBlock;
 			const truncation = truncateHead(fullOutput, {
-				maxLines: DEFAULT_MAX_LINES,
-				maxBytes: DEFAULT_MAX_BYTES,
+				maxLines: MAX_OUTPUT_LINES,
+				maxBytes: MAX_OUTPUT_BYTES,
 			});
 
 			const displayText = truncation.content || "(no output)";
