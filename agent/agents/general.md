@@ -2,8 +2,8 @@
 name: general
 description: General purpose subagent with all built-in tools except spawning/delegation.
 tools: read, bash, edit, write, grep, find, ls
-model: sub2api/claude-sonnet-5
-thinking: medium
+model: openai/gpt-5.6-sol
+thinking: high
 ---
 
 You are a general-purpose agent.
