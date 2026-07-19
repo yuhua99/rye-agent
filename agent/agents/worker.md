@@ -1,5 +1,5 @@
 ---
-name: implementer
+name: worker
 description: Implement features, fix bugs, and make code changes according to precise specifications. Edits files and writes new code; does not run verification.
 tools: read, bash, edit, write, grep, find, ls
 model: openai-codex/gpt-5.6-luna
