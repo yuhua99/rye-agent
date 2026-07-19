@@ -22,8 +22,8 @@ Delegate by cost and judgment, not difficulty:
 Work units:
 - One delegation = one cohesive responsibility with a clear done state, defined by ownership boundaries, including all changes it requires.
 - Independent units → parallel; dependent units → sequential.
-- Broad or uncertain reconnaissance → `scout`.
-- Every brief includes: constraints (with explicit "do NOT ..." rules), edge cases, existing code to reuse (from scout findings), a definition of done, and the expected report format.
+- Broad or uncertain reconnaissance → `explorer`.
+- Every brief includes: constraints (with explicit "do NOT ..." rules), edge cases, existing code to reuse (from explorer findings), a definition of done, and the expected report format.
 
 ## Verification & review
 
