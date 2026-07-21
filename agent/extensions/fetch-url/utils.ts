@@ -1,6 +1,10 @@
 import { Readability } from "@mozilla/readability";
-import { JSDOM } from "jsdom";
+import { JSDOM, VirtualConsole } from "jsdom";
 import TurndownService from "turndown";
+
+// Suppress noisy non-fatal jsdom errors (e.g. "Could not parse CSS stylesheet")
+// that jsdom would otherwise forward to the real console and dump into the TUI.
+const silentConsole = new VirtualConsole();
 
 export const DEFAULT_MAIN_CONTENT_SELECTORS = [
 	"article",
@@ -128,7 +132,7 @@ export function extractMetadataFromDocument(document: Document): ExtractedMetada
 }
 
 export function extractMetadataFromHtml(html: string, url: string): ExtractedMetadata {
-	const dom = new JSDOM(html, { url });
+	const dom = new JSDOM(html, { url, virtualConsole: silentConsole });
 	return extractMetadataFromDocument(dom.window.document);
 }
 
@@ -181,7 +185,7 @@ export function pickBestContentNode(
 }
 
 export function extractReadableContent(html: string, url: string): ExtractedContent {
-	const dom = new JSDOM(html, { url });
+	const dom = new JSDOM(html, { url, virtualConsole: silentConsole });
 	const document = dom.window.document;
 	const baseMetadata = extractMetadataFromDocument(document);
 
@@ -212,7 +216,7 @@ export function extractReadableContent(html: string, url: string): ExtractedCont
 		};
 	}
 
-	const fallbackDocument = new JSDOM(html, { url }).window.document;
+	const fallbackDocument = new JSDOM(html, { url, virtualConsole: silentConsole }).window.document;
 	const fallback = pickBestContentNode(fallbackDocument);
 
 	if (fallback) {
