@@ -2,7 +2,7 @@
 name: explorer
 description: Local codebase reconnaissance for locating files, flows, patterns, and conventions in the current repo.
 tools: read, bash, grep, find, ls
-model: grok/grok-4.5
+model: xai/grok-4.5
 thinking: medium
 ---
 

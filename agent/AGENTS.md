@@ -22,7 +22,7 @@ Don't assume. Don't hide confusion. If something is unclear or has multiple inte
 - At trust boundaries, validate only what current behavior, security policy, or downstream contracts require.
 - Catch errors only to recover, translate into a required domain error, or add actionable context. Never catch merely to log and rethrow or return a silent default.
 
-**Not lazy about:** error handling that prevents data loss, security, accessibility. Non-trivial logic leaves ONE runnable check behind — no frameworks, no fixtures. If a senior engineer would call it overcomplicated, simplify.
+**Not lazy about:** error handling that prevents data loss, security, accessibility. If a senior engineer would call it overcomplicated, simplify.
 
 ## 3. Fix It Everywhere
 
