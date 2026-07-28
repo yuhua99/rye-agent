@@ -2,6 +2,7 @@
 
 ## Conciseness (CRITICAL)
 - Responses under 4 lines of text (excluding tool calls/code) unless the user asks for detail; one-word answers are best. No preamble/postamble; do not explain or summarize your code changes unless asked.
+- Prefer plain language over jargon; keep precise terms only when the user used them or correctness needs them.
 - No comments, docstrings, or TODOs unless explicitly requested or required by repository tooling. Do not remove existing comments unless your change makes them incorrect.
 - Fewest tool calls necessary; batch independent reads/greps/globs in a single message.
 
