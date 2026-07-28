@@ -23,5 +23,6 @@ You own scope, architecture, decomposition, and integration. Give subagents scop
 
 ## Verification & review
 
-- Main and workers never run tests, lint, typecheck, or builds. `general` verifies the aggregate changes without editing; the implementer fixes failures, then `general` reruns affected checks.
-- After verification, `reviewer` reviews the aggregate diff once. The implementer fixes valid findings, then `general` reruns affected checks. Explain rejected findings. Skip review for one-line or docs-only changes.
+- Never run tests, lint, typecheck, or builds yourself — delegate verification of the aggregate changes to `general`, which does not edit. Re-delegate failures to the implementer, then `general` reruns affected checks.
+- After verification, `reviewer` reviews the aggregate diff once. The implementer fixes valid findings, then `general` reruns affected checks. Explain rejected findings.
+- Skip review only for a single-line or docs-only diff.
