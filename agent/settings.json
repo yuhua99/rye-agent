@@ -1,10 +1,11 @@
 {
-  "lastChangelogVersion": "0.80.3",
-  "defaultProvider": "sub2api",
-  "defaultModel": "claude-fable-5",
+  "lastChangelogVersion": "0.82.1",
+  "defaultProvider": "xai",
+  "defaultModel": "grok-4.5",
   "defaultThinkingLevel": "medium",
   "packages": [
-    "../../playground/proj/ai-related/pi-subagent"
+    "git:github.com/yuhua99/pi-subagent",
+    "npm:pi-context-view"
   ],
   "quietStartup": true,
   "hideThinkingBlock": false,
