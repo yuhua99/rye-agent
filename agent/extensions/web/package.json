@@ -1,5 +1,5 @@
 {
-  "name": "fetch-url",
+  "name": "web",
   "type": "module",
   "pi": {
     "extensions": [
@@ -12,5 +12,9 @@
     "turndown": "^7.1.2",
     "typebox": "^1.1.38",
     "undici": "^8.5.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.3",
+    "@types/turndown": "^5.0.6"
   }
 }

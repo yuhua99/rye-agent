@@ -2,8 +2,6 @@ import { Readability } from "@mozilla/readability";
 import { JSDOM, VirtualConsole } from "jsdom";
 import TurndownService from "turndown";
 
-// Suppress noisy non-fatal jsdom errors (e.g. "Could not parse CSS stylesheet")
-// that jsdom would otherwise forward to the real console and dump into the TUI.
 const silentConsole = new VirtualConsole();
 
 export const DEFAULT_MAIN_CONTENT_SELECTORS = [
@@ -53,9 +51,7 @@ function normalizeTextContent(value: string | null | undefined): string {
 function firstNonEmpty(...values: Array<string | null | undefined>): string | undefined {
 	for (const value of values) {
 		const normalized = normalizeText(value);
-		if (normalized) {
-			return normalized;
-		}
+		if (normalized) return normalized;
 	}
 	return undefined;
 }
@@ -65,8 +61,7 @@ function getMetaContent(
 	attribute: "name" | "property" | "itemprop",
 	key: string,
 ): string | undefined {
-	const selector = `meta[${attribute}="${key}"]`;
-	const content = document.querySelector(selector)?.getAttribute("content");
+	const content = document.querySelector(`meta[${attribute}="${key}"]`)?.getAttribute("content");
 	return normalizeText(content);
 }
 
@@ -83,14 +78,10 @@ export function extractPublishedTime(document: Document): string | undefined {
 		{ attribute: "name", key: "dcterms.created" },
 		{ attribute: "itemprop", key: "datePublished" },
 	];
-
 	for (const { attribute, key } of metaKeys) {
 		const value = getMetaContent(document, attribute, key);
-		if (value) {
-			return value;
-		}
+		if (value) return value;
 	}
-
 	const timeElement = document.querySelector("time[datetime]");
 	return firstNonEmpty(timeElement?.getAttribute("datetime"), timeElement?.textContent);
 }
@@ -102,33 +93,21 @@ export function extractMetadataFromDocument(document: Document): ExtractedMetada
 		getMetaContent(document, "name", "title"),
 		normalizeText(document.title),
 	);
-
 	const byline = firstNonEmpty(
 		getMetaContent(document, "name", "author"),
 		getMetaContent(document, "property", "article:author"),
 		getMetaContent(document, "name", "parsely-author"),
 		getMetaContent(document, "name", "sailthru.author"),
 	);
-
 	const siteName = firstNonEmpty(
 		getMetaContent(document, "property", "og:site_name"),
 		getMetaContent(document, "name", "application-name"),
 	);
-
 	const lang = firstNonEmpty(
 		normalizeText(document.documentElement?.getAttribute("lang")),
 		getMetaContent(document, "property", "og:locale"),
 	);
-
-	const publishedTime = extractPublishedTime(document);
-
-	return {
-		title,
-		byline,
-		siteName,
-		publishedTime,
-		lang,
-	};
+	return { title, byline, siteName, publishedTime: extractPublishedTime(document), lang };
 }
 
 export function extractMetadataFromHtml(html: string, url: string): ExtractedMetadata {
@@ -141,99 +120,51 @@ export function pickBestContentNode(
 	selectors: string[] = DEFAULT_MAIN_CONTENT_SELECTORS,
 ): { html: string; text: string; selector: string } | null {
 	for (const el of document.querySelectorAll("style, script, noscript, svg, template")) el.remove();
-
 	let best: { html: string; text: string; length: number; selector: string } | null = null;
-
 	for (const selector of selectors) {
-		const elements = Array.from(document.querySelectorAll(selector));
-		for (const element of elements) {
+		for (const element of Array.from(document.querySelectorAll(selector))) {
 			const text = normalizeTextContent(element.textContent);
-			const length = text.length;
-			if (!text || length === 0) {
-				continue;
-			}
-			if (!best || length > best.length) {
-				best = {
-					html: element.innerHTML.trim(),
-					text,
-					length,
-					selector,
-				};
+			if (!text) continue;
+			if (!best || text.length > best.length) {
+				best = { html: element.innerHTML.trim(), text, length: text.length, selector };
 			}
 		}
 	}
-
-	if (best) {
-		return { html: best.html, text: best.text, selector: best.selector };
-	}
-
+	if (best) return { html: best.html, text: best.text, selector: best.selector };
 	const body = document.body;
-	if (!body) {
-		return null;
-	}
-
-	const bodyText = normalizeTextContent(body.textContent);
-	if (!bodyText) {
-		return null;
-	}
-
-	return {
-		html: body.innerHTML.trim(),
-		text: bodyText,
-		selector: "body",
-	};
+	if (!body) return null;
+	const text = normalizeTextContent(body.textContent);
+	if (!text) return null;
+	return { html: body.innerHTML.trim(), text, selector: "body" };
 }
 
 export function extractReadableContent(html: string, url: string): ExtractedContent {
 	const dom = new JSDOM(html, { url, virtualConsole: silentConsole });
 	const document = dom.window.document;
 	const baseMetadata = extractMetadataFromDocument(document);
-
 	let article: ReturnType<Readability["parse"]> | null = null;
 	try {
 		article = new Readability(document).parse();
 	} catch {
 		article = null;
 	}
-
-	const mergedMetadata: ExtractedMetadata = {
+	const metadata: ExtractedMetadata = {
 		title: normalizeText(article?.title) ?? baseMetadata.title,
 		byline: normalizeText(article?.byline) ?? baseMetadata.byline,
 		siteName: normalizeText(article?.siteName) ?? baseMetadata.siteName,
 		publishedTime: baseMetadata.publishedTime,
 		lang: normalizeText(article?.lang) ?? baseMetadata.lang,
 	};
-
-	const articleHtml = article?.content?.trim() ?? "";
-	const articleText = normalizeTextContent(article?.textContent);
-
-	if (articleHtml && articleText.length >= MIN_CONTENT_LENGTH) {
-		return {
-			html: articleHtml,
-			text: articleText,
-			metadata: mergedMetadata,
-			usedFallback: false,
-		};
+	const htmlContent = article?.content?.trim() ?? "";
+	const text = normalizeTextContent(article?.textContent);
+	if (htmlContent && text.length >= MIN_CONTENT_LENGTH) {
+		return { html: htmlContent, text, metadata, usedFallback: false };
 	}
-
-	const fallbackDocument = new JSDOM(html, { url, virtualConsole: silentConsole }).window.document;
-	const fallback = pickBestContentNode(fallbackDocument);
-
-	if (fallback) {
-		return {
-			html: fallback.html,
-			text: fallback.text,
-			metadata: mergedMetadata,
-			usedFallback: true,
-		};
-	}
-
-	return {
-		html: "",
-		text: "",
-		metadata: mergedMetadata,
-		usedFallback: true,
-	};
+	const fallback = pickBestContentNode(
+		new JSDOM(html, { url, virtualConsole: silentConsole }).window.document,
+	);
+	if (fallback) return { html: fallback.html, text: fallback.text, metadata, usedFallback: true };
+	return { html: "", text: "", metadata, usedFallback: true };
 }
 
 export function convertHtmlToMarkdown(html: string): string {
@@ -244,7 +175,7 @@ export function formatMetadataBlock(
 	metadata: ExtractedMetadata,
 	options: { url: string; contentType?: string },
 ): string {
-	const pairs: Array<[string, string | undefined]> = [
+	return [
 		["URL", options.url],
 		["Content-Type", options.contentType],
 		["Title", metadata.title],
@@ -252,17 +183,14 @@ export function formatMetadataBlock(
 		["Site", metadata.siteName],
 		["Published", metadata.publishedTime],
 		["Language", metadata.lang],
-	];
-	return pairs
-		.filter(([, v]) => v)
-		.map(([k, v]) => `${k}: ${v}`)
+	]
+		.filter(([, value]) => value)
+		.map(([key, value]) => `${key}: ${value}`)
 		.join("\n");
 }
 
 export function isHtmlContentType(contentType: string | null | undefined): boolean {
-	if (!contentType) {
-		return true;
-	}
+	if (!contentType) return true;
 	const lowered = contentType.toLowerCase();
 	return lowered.includes("text/html") || lowered.includes("application/xhtml+xml");
 }
