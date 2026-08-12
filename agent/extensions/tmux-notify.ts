@@ -62,12 +62,12 @@ export default function (pi: ExtensionAPI) {
 			"-p",
 			"-t",
 			pane,
-			"#{session_attached}\t#{window_active}\t#{pane_active}",
+			"#{session_attached}\t#{window_active}",
 		]);
 		if (info === null) return;
 
-		const [attached, windowActive, paneActive] = info.split("\t");
-		if (attached !== "0" && windowActive === "1" && paneActive === "1") return;
+		const [attached, windowActive] = info.split("\t");
+		if (attached !== "0" && windowActive === "1") return;
 
 		await enqueue(pane);
 	});

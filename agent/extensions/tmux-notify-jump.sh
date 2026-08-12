@@ -36,11 +36,16 @@ set_queue() {
 }
 
 remove_pane() {
-	local target=$1 p
+	local target=$1 p found=false
 	local -a next=()
 	for p in $(get_queue); do
-		[[ $p == "$target" ]] || next+=("$p")
+		if [[ $p == "$target" ]]; then
+			found=true
+		else
+			next+=("$p")
+		fi
 	done
+	$found || return 0
 	if ((${#next[@]})); then
 		set_queue "${next[*]}"
 	else
@@ -53,10 +58,10 @@ pane_exists() {
 }
 
 pane_focused() {
-	local flags attached window_active pane_active
-	flags=$(tmux display -p -t "$1" '#{session_attached} #{window_active} #{pane_active}' 2>/dev/null) || return 1
-	read -r attached window_active pane_active <<<"$flags"
-	[[ $attached != 0 && $window_active == 1 && $pane_active == 1 ]]
+	local flags attached window_active
+	flags=$(tmux display -p -t "$1" '#{session_attached} #{window_active}' 2>/dev/null) || return 1
+	read -r attached window_active <<<"$flags"
+	[[ $attached != 0 && $window_active == 1 ]]
 }
 
 focused_client() {
@@ -110,6 +115,15 @@ jump() {
 	tmux select-pane -t "$pane"
 	remove_pane "$pane"
 }
+
+if [[ ${1:-} == --clear-pane ]]; then
+	pane=$(normalize_pane "${2:-}") || exit 1
+	window=$(tmux display -p -t "$pane" '#{session_id}:#{window_id}' 2>/dev/null) || exit 1
+	for queued in $(get_queue); do
+		[[ $(tmux display -p -t "$queued" '#{session_id}:#{window_id}' 2>/dev/null || true) == "$window" ]] && remove_pane "$queued"
+	done
+	exit 0
+fi
 
 if [[ -n "${1:-}" ]]; then
 	jump "$1" "${2:-}" || exit 1
