@@ -15,8 +15,12 @@ import {
   createHopSignal,
   createMergedSignal,
   formatTruncationNotice,
+  MAX_ERROR_BODY_BYTES,
+  MAX_RESPONSE_BYTES,
+  readBodyCapped,
   truncateOutput,
 } from "./shared.js";
+import { fetchReddit, isRedditUrl } from "./reddit.js";
 import type { ExtractedMetadata as HtmlMetadata } from "./utils.js";
 
 const webfetchSchema = Type.Object(
@@ -81,8 +85,6 @@ type WebsearchDetails = {
   cancelled?: boolean;
 };
 
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-const MAX_ERROR_BODY_BYTES = 4 * 1024;
 const WEBFETCH_MAX_LINES = 500;
 const WEBFETCH_MAX_BYTES = 16 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
@@ -476,30 +478,6 @@ async function fetchWithRetry(
   }
 }
 
-async function readBodyCapped(
-  response: FetchResponse,
-  maxBytes: number,
-): Promise<Buffer> {
-  if (!response.body) return Buffer.alloc(0);
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total + value.byteLength >= maxBytes) {
-      const chunk = value.subarray(0, maxBytes - total);
-      chunks.push(chunk);
-      total += chunk.byteLength;
-      await reader.cancel();
-      break;
-    }
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  return Buffer.concat(chunks);
-}
-
 function charsetFromContentType(contentType: string | null): string | undefined {
   const match = contentType?.match(/charset\s*=\s*("?)([^";\s]+)\1/i);
   return match?.[2]?.toLowerCase();
@@ -779,6 +757,29 @@ function renderWebsearchResult(
   return new Container();
 }
 
+
+async function packageWebfetchOutput(
+  fullOutput: string,
+  base: Omit<WebfetchDetails, "displayText" | "truncation" | "fullOutputPath">,
+  tempPrefix = "pi-webfetch",
+): Promise<{ content: Array<{ type: "text"; text: string }>; details: WebfetchDetails }> {
+  const { truncation, fullOutputPath } = await truncateOutput(fullOutput, {
+    maxLines: WEBFETCH_MAX_LINES,
+    maxBytes: WEBFETCH_MAX_BYTES,
+    tempPrefix,
+    extension: "log",
+  });
+  const displayText = truncation.content || "(no output)";
+  const details: WebfetchDetails = { ...base, displayText };
+  let text = displayText;
+  if (fullOutputPath) {
+    details.truncation = truncation;
+    details.fullOutputPath = fullOutputPath;
+    text += `\n\n${formatTruncationNotice(truncation, fullOutputPath)}`;
+  }
+  return { content: [{ type: "text", text }], details };
+}
+
 export default function (pi: ExtensionAPI) {
   const websearchDescription = `Real-time web search. Today's date: ${localDate()}. Returns current web results.`;
 
@@ -831,6 +832,20 @@ export default function (pi: ExtensionAPI) {
         FETCH_TIMEOUT_MS,
       );
       try {
+        if (isRedditUrl(parsedUrl)) {
+          const reddit = await fetchReddit(parsedUrl, fetchSignal);
+          return packageWebfetchOutput(
+            reddit.text,
+            {
+              url: reddit.finalUrl,
+              status: reddit.status,
+              contentType: reddit.contentType,
+              format: "markdown",
+              metadata: { title: reddit.title, siteName: "Reddit" },
+            },
+            "pi-webfetch-reddit",
+          );
+        }
         const { response, url } = await fetchWithRetry(
           parsedUrl,
           fetchSignal,
@@ -877,32 +892,14 @@ export default function (pi: ExtensionAPI) {
         const fullOutput = outputContent
           ? `${utils.formatMetadataBlock(metadata, { url: url.toString(), contentType })}\n\n${outputContent}`
           : utils.formatMetadataBlock(metadata, { url: url.toString(), contentType });
-        const { truncation, fullOutputPath } = await truncateOutput(
-          fullOutput,
-          {
-            maxLines: WEBFETCH_MAX_LINES,
-            maxBytes: WEBFETCH_MAX_BYTES,
-            tempPrefix: "pi-webfetch",
-            extension: "log",
-          },
-        );
-        const displayText = truncation.content || "(no output)";
-        const details: WebfetchDetails = {
+        return packageWebfetchOutput(fullOutput, {
           url: url.toString(),
           status: response.status,
           contentType,
           format: effectiveFormat,
           metadata,
           usedFallback,
-          displayText,
-        };
-        let text = displayText;
-        if (fullOutputPath) {
-          details.truncation = truncation;
-          details.fullOutputPath = fullOutputPath;
-          text += `\n\n${formatTruncationNotice(truncation, fullOutputPath)}`;
-        }
-        return { content: [{ type: "text", text }], details };
+        });
       } finally {
         cleanup();
       }

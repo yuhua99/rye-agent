@@ -4,6 +4,33 @@ import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+export const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+export const MAX_ERROR_BODY_BYTES = 4 * 1024;
+
+export async function readBodyCapped(
+	response: { body: ReadableStream<Uint8Array> | null },
+	maxBytes: number,
+): Promise<Buffer> {
+	if (!response.body) return Buffer.alloc(0);
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		if (total + value.byteLength >= maxBytes) {
+			const chunk = value.subarray(0, maxBytes - total);
+			chunks.push(chunk);
+			total += chunk.byteLength;
+			await reader.cancel();
+			break;
+		}
+		chunks.push(value);
+		total += value.byteLength;
+	}
+	return Buffer.concat(chunks);
+}
+
 export function createMergedSignal(
 	parentSignal: AbortSignal | undefined,
 	timeoutMs: number,
