@@ -25,6 +25,18 @@ export function createMergedSignal(
 	};
 }
 
+export function createHopSignal(
+	parentSignal: AbortSignal,
+	timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
+	const hopController = new AbortController();
+	const timeoutId = setTimeout(() => hopController.abort(), timeoutMs);
+	return {
+		signal: AbortSignal.any([parentSignal, hopController.signal]),
+		cleanup: () => clearTimeout(timeoutId),
+	};
+}
+
 export async function truncateOutput(
 	content: string,
 	options: { maxLines: number; maxBytes: number; tempPrefix: string; extension: string },

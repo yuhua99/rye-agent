@@ -11,17 +11,12 @@ import { lookup as dnsLookup } from "node:dns";
 import { isIP } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
 import {
+  createHopSignal,
   createMergedSignal,
   formatTruncationNotice,
   truncateOutput,
 } from "./shared.js";
-import {
-  convertHtmlToMarkdown,
-  extractMetadataFromHtml,
-  extractReadableContent,
-  formatMetadataBlock,
-  isHtmlContentType,
-} from "./utils.js";
+import type { ExtractedMetadata as HtmlMetadata } from "./utils.js";
 
 const webfetchSchema = Type.Object(
   {
@@ -60,7 +55,7 @@ type WebfetchDetails = {
   status: number;
   contentType?: string;
   format: "markdown" | "html" | "raw";
-  metadata?: ReturnType<typeof extractMetadataFromHtml>;
+  metadata?: HtmlMetadata;
   usedFallback?: boolean;
   displayText?: string;
   truncation?: TruncationResult;
@@ -90,13 +85,16 @@ const MAX_ERROR_BODY_BYTES = 4 * 1024;
 const WEBFETCH_MAX_LINES = 500;
 const WEBFETCH_MAX_BYTES = 16 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
+const HOP_TIMEOUT_MS = 10_000;
+const MIN_HOP_TIMEOUT_MS = 1_000;
 const WEBSEARCH_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
-const DEFAULT_USER_AGENT = "pi-fetch-url/1.0 (+https://pi)";
-const FALLBACK_USER_AGENT = "pi";
+const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const DEFAULT_EXA_ENDPOINT = "https://mcp.exa.ai/mcp";
 
 class PolicyError extends Error {}
+class TimeoutBudgetError extends Error {}
 
 function isPrivateIPv4(ip: string): boolean {
   const [a, b] = ip.split(".").map(Number);
@@ -209,13 +207,21 @@ function acceptForFormat(format: WebfetchParams["format"]): string {
   return "text/plain,text/html;q=0.9,*/*;q=0.5";
 }
 
+function hopTimeoutMs(deadline: number): number {
+  const remaining = deadline - Date.now();
+  if (remaining < MIN_HOP_TIMEOUT_MS)
+    throw new TimeoutBudgetError("Webfetch timed out before starting another request");
+  return Math.min(HOP_TIMEOUT_MS, remaining);
+}
+
 async function fetchWithPolicy(
   url: URL,
   signal: AbortSignal,
-  userAgent: string,
   format: WebfetchParams["format"],
+  deadline: number,
 ): Promise<FetchResult> {
   let current = url;
+  let previousOrigin = url.origin;
   for (let index = 0; index <= MAX_REDIRECTS; index++) {
     if (!["http:", "https:"].includes(current.protocol)) {
       throw new PolicyError(
@@ -225,15 +231,41 @@ async function fetchWithPolicy(
       );
     }
     assertHostAllowed(current);
-    const response = await undiciFetch(current.toString(), {
+    const { signal: hopSignal, cleanup } = createHopSignal(
       signal,
-      redirect: "manual",
-      headers: { Accept: acceptForFormat(format), "User-Agent": userAgent },
-      dispatcher: safeAgent,
-    });
+      hopTimeoutMs(deadline),
+    );
+    let response: FetchResponse;
+    try {
+      response = await undiciFetch(current.toString(), {
+        signal: hopSignal,
+        redirect: "manual",
+        headers: {
+          Accept: acceptForFormat(format),
+          "User-Agent": DEFAULT_USER_AGENT,
+          "Accept-Language": "en-US,en;q=0.9",
+          "Upgrade-Insecure-Requests": "1",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site":
+            index === 0
+              ? "none"
+              : current.origin === previousOrigin
+                ? "same-origin"
+                : "cross-site",
+          "Sec-Fetch-User": "?1",
+        },
+        dispatcher: safeAgent,
+      });
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+    cleanup();
     const location = response.headers.get("location");
     if (response.status >= 300 && response.status < 400 && location) {
       await response.body?.cancel();
+      previousOrigin = current.origin;
       current = new URL(location, current);
       continue;
     }
@@ -270,23 +302,12 @@ async function fetchWithRetry(
   url: URL,
   signal: AbortSignal,
   format: WebfetchParams["format"],
+  deadline: number,
 ): Promise<FetchResult> {
   let retries = 0;
-  let fallbackTried = false;
-  let userAgent = DEFAULT_USER_AGENT;
   while (true) {
     try {
-      const result = await fetchWithPolicy(url, signal, userAgent, format);
-      if (
-        result.response.status === 403 &&
-        result.response.headers.get("cf-mitigated") === "challenge" &&
-        !fallbackTried
-      ) {
-        await result.response.body?.cancel();
-        fallbackTried = true;
-        userAgent = FALLBACK_USER_AGENT;
-        continue;
-      }
+      const result = await fetchWithPolicy(url, signal, format, deadline);
       if (result.response.status >= 500 && retries < 2) {
         await result.response.body?.cancel();
         await waitForRetry(
@@ -298,7 +319,13 @@ async function fetchWithRetry(
       }
       return result;
     } catch (error) {
-      if (signal.aborted || isPolicyError(error) || retries >= 2) throw error;
+      if (
+        signal.aborted ||
+        isPolicyError(error) ||
+        error instanceof TimeoutBudgetError ||
+        retries >= 2
+      )
+        throw error;
       await waitForRetry(
         signal,
         (retries === 0 ? 500 : 1000) + Math.floor(Math.random() * 100),
@@ -330,6 +357,66 @@ async function readBodyCapped(
     total += value.byteLength;
   }
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function classifyBlock(
+  response: FetchResponse,
+  body: string,
+):
+  | "cloudflare_challenge"
+  | "anubis_bot_check"
+  | "waf_blocked"
+  | "rate_limited"
+  | "access_denied"
+  | undefined {
+  const content = body.toLowerCase();
+  const server = response.headers.get("server")?.toLowerCase() ?? "";
+  if (response.status === 429) return "rate_limited";
+  if (response.headers.get("cf-mitigated") === "challenge")
+    return "cloudflare_challenge";
+  if (response.status === 403 || response.status === 503) {
+    if (
+      ["just a moment", "cf-browser-verification", "cf-chl", "challenge-platform"].some(
+        (marker) => content.includes(marker),
+      )
+    )
+      return "cloudflare_challenge";
+    if (
+      content.includes("making sure you're not a bot") ||
+      /\banubis\b/.test(content)
+    )
+      return "anubis_bot_check";
+  }
+  if (
+    content.includes("blocked by network security") ||
+    content.includes("incapsula incident id") ||
+    ((server.includes("akamai") || server.includes("imperva")) &&
+      content.includes("access denied"))
+  )
+    return "waf_blocked";
+  if (response.status === 401 || response.status === 403) return "access_denied";
+}
+
+function requestError(response: FetchResponse, url: URL, body: string): Error {
+  const kind = classifyBlock(response, body);
+  const status = `${response.status} ${response.statusText}`.trim();
+  const excerpt = body ? `\nBody: ${body.slice(0, 300)}` : "";
+  if (!kind) return new Error(`Request failed (status ${status}) at ${url}${excerpt}`);
+  const hints = {
+    cloudflare_challenge:
+      "This looks like a bot/JS challenge page; webfetch cannot solve it. Try websearch for a summary or a different source URL.",
+    anubis_bot_check:
+      "This site requires a bot check that webfetch cannot solve. Try websearch or a different source URL.",
+    waf_blocked:
+      "This site appears to block automated requests. Try websearch or a different source URL.",
+    rate_limited:
+      "The site rate-limited this request. Wait and try again, or use websearch or a different source URL.",
+    access_denied:
+      "This URL requires access that webfetch does not have. Try a public source or websearch.",
+  };
+  return new Error(
+    `Blocked by ${kind} (HTTP ${response.status}) at ${url}\nHints: ${hints[kind]}${excerpt}`,
+  );
 }
 
 function extractText(result: {
@@ -552,12 +639,14 @@ export default function (pi: ExtensionAPI) {
     },
     async execute(_toolCallId, params: WebfetchParams, signal) {
       if (signal?.aborted) throw new Error("Operation aborted");
+      const utils = await import("./utils.js");
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(params.url);
       } catch {
         throw new Error("webfetch requires a valid URL");
       }
+      const deadline = Date.now() + FETCH_TIMEOUT_MS;
       const { signal: fetchSignal, cleanup } = createMergedSignal(
         signal,
         FETCH_TIMEOUT_MS,
@@ -567,6 +656,7 @@ export default function (pi: ExtensionAPI) {
           parsedUrl,
           fetchSignal,
           params.format,
+          deadline,
         );
         if (!response.ok) {
           const errorBody = (
@@ -574,10 +664,7 @@ export default function (pi: ExtensionAPI) {
           )
             .replace(/[\u0000-\u001f\u007f]+/g, " ")
             .trim();
-          const suffix = errorBody ? `: ${errorBody.slice(0, 300)}` : "";
-          throw new Error(
-            `Request failed (${response.status} ${response.statusText})${suffix}`,
-          );
+          throw requestError(response, url, errorBody);
         }
         const contentType = response.headers
           .get("content-type")
@@ -585,14 +672,14 @@ export default function (pi: ExtensionAPI) {
           ?.trim();
         const body = await readBodyCapped(response, MAX_RESPONSE_BYTES);
         const wantsRaw = params.raw ?? false;
-        const isHtml = isHtmlContentType(contentType);
+        const isHtml = utils.isHtmlContentType(contentType);
         const format = params.format ?? "markdown";
         let outputContent = body;
-        let metadata: ReturnType<typeof extractMetadataFromHtml> = {};
+        let metadata: HtmlMetadata = {};
         let usedFallback: boolean | undefined;
         let effectiveFormat: WebfetchDetails["format"] = "raw";
         if (!wantsRaw && isHtml) {
-          const extracted = extractReadableContent(body, url.toString());
+          const extracted = utils.extractReadableContent(body, url.toString());
           metadata = extracted.metadata;
           usedFallback = extracted.usedFallback;
           const htmlContent = extracted.html || body;
@@ -600,15 +687,15 @@ export default function (pi: ExtensionAPI) {
             outputContent = htmlContent;
             effectiveFormat = "html";
           } else {
-            outputContent = convertHtmlToMarkdown(htmlContent);
+            outputContent = utils.convertHtmlToMarkdown(htmlContent);
             effectiveFormat = "markdown";
           }
         } else if (isHtml) {
-          metadata = extractMetadataFromHtml(body, url.toString());
+          metadata = utils.extractMetadataFromHtml(body, url.toString());
         }
         const fullOutput = outputContent
-          ? `${formatMetadataBlock(metadata, { url: url.toString(), contentType })}\n\n${outputContent}`
-          : formatMetadataBlock(metadata, { url: url.toString(), contentType });
+          ? `${utils.formatMetadataBlock(metadata, { url: url.toString(), contentType })}\n\n${outputContent}`
+          : utils.formatMetadataBlock(metadata, { url: url.toString(), contentType });
         const { truncation, fullOutputPath } = await truncateOutput(
           fullOutput,
           {
