@@ -21,6 +21,7 @@ import {
   truncateOutput,
 } from "./shared.js";
 import { fetchReddit, isRedditUrl } from "./reddit.js";
+import { fetchTwitter, isTwitterUrl } from "./twitter.js";
 import type { ExtractedMetadata as HtmlMetadata } from "./utils.js";
 
 const webfetchSchema = Type.Object(
@@ -844,6 +845,20 @@ export default function (pi: ExtensionAPI) {
               metadata: { title: reddit.title, siteName: "Reddit" },
             },
             "pi-webfetch-reddit",
+          );
+        }
+        if (isTwitterUrl(parsedUrl)) {
+          const twitter = await fetchTwitter(parsedUrl, fetchSignal);
+          return packageWebfetchOutput(
+            twitter.text,
+            {
+              url: twitter.finalUrl,
+              status: twitter.status,
+              contentType: twitter.contentType,
+              format: "markdown",
+              metadata: { title: twitter.title, siteName: "X" },
+            },
+            "pi-webfetch-twitter",
           );
         }
         const { response, url } = await fetchWithRetry(
