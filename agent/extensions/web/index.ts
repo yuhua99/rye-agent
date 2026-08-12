@@ -201,6 +201,12 @@ const safeAgent = new Agent({
 type FetchResponse = Awaited<ReturnType<typeof undiciFetch>>;
 type FetchResult = { response: FetchResponse; url: URL };
 
+function isSameSite(a: URL, b: URL): boolean {
+  const ha = a.hostname.toLowerCase();
+  const hb = b.hostname.toLowerCase();
+  return ha === hb || ha.endsWith(`.${hb}`) || hb.endsWith(`.${ha}`);
+}
+
 function acceptForFormat(format: WebfetchParams["format"]): string {
   if (format === "markdown")
     return "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5";
@@ -248,6 +254,8 @@ function createCookieJar(): CookieJar {
       let hostOnly = true;
       let path = "/";
       let secure = false;
+      let maxAge: number | undefined;
+      let expires: number | undefined;
       let rejected = false;
       for (const part of raw.split(";").slice(1)) {
         const attrEq = part.indexOf("=");
@@ -257,7 +265,10 @@ function createCookieJar(): CookieJar {
         const attrVal = attrEq === -1 ? "" : part.slice(attrEq + 1).trim();
         if (key === "domain" && attrVal) {
           const candidate = attrVal.replace(/^\./, "").toLowerCase();
-          if (host !== candidate && !host.endsWith(`.${candidate}`)) {
+          if (
+            !candidate.includes(".") ||
+            (host !== candidate && !host.endsWith(`.${candidate}`))
+          ) {
             rejected = true;
             break;
           }
@@ -265,6 +276,12 @@ function createCookieJar(): CookieJar {
           hostOnly = false;
         } else if (key === "path" && attrVal.startsWith("/")) {
           path = attrVal;
+        } else if (key === "max-age") {
+          const parsed = Number.parseInt(attrVal, 10);
+          if (!Number.isNaN(parsed)) maxAge = parsed;
+        } else if (key === "expires") {
+          const parsed = Date.parse(attrVal);
+          if (!Number.isNaN(parsed)) expires = parsed;
         } else if (key === "secure") {
           secure = true;
         }
@@ -285,6 +302,14 @@ function createCookieJar(): CookieJar {
           cookie.domain === domain &&
           cookie.path === path,
       );
+      if (
+        maxAge !== undefined
+          ? maxAge <= 0
+          : expires !== undefined && expires <= Date.now()
+      ) {
+        if (index >= 0) cookies.splice(index, 1);
+        continue;
+      }
       const next = { name, value, domain, hostOnly, path, secure };
       if (index >= 0) cookies[index] = next;
       else cookies.push(next);
@@ -352,7 +377,9 @@ async function fetchWithPolicy(
           ? "none"
           : current.origin === previousOrigin
             ? "same-origin"
-            : "cross-site",
+            : isSameSite(current, new URL(previousOrigin))
+              ? "same-site"
+              : "cross-site",
       "Sec-Fetch-User": "?1",
     };
     const cookie = jar.header(current);
@@ -418,7 +445,11 @@ async function fetchWithRetry(
   while (true) {
     try {
       const result = await fetchWithPolicy(url, signal, format, deadline, jar);
-      if (result.response.status >= 500 && retries < 2) {
+      if (
+        result.response.status >= 500 &&
+        result.response.headers.get("cf-mitigated") !== "challenge" &&
+        retries < 2
+      ) {
         await result.response.body?.cancel();
         await waitForRetry(
           signal,
@@ -474,6 +505,11 @@ function charsetFromContentType(contentType: string | null): string | undefined 
   return match?.[2]?.toLowerCase();
 }
 
+function isHtmlContentTypeHeader(contentType: string | null): boolean {
+  const type = contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
+  return type === "text/html" || type === "application/xhtml+xml" || type === "";
+}
+
 function charsetFromHtmlMeta(buf: Buffer): string | undefined {
   const head = buf.subarray(0, Math.min(buf.length, 4096)).toString("latin1");
   const match =
@@ -494,7 +530,7 @@ function normalizeCharset(charset: string): string {
 function decodeBody(buf: Buffer, contentType: string | null): string {
   const raw =
     charsetFromContentType(contentType) ||
-    charsetFromHtmlMeta(buf) ||
+    (isHtmlContentTypeHeader(contentType) ? charsetFromHtmlMeta(buf) : undefined) ||
     "utf-8";
   const charset = normalizeCharset(raw);
   if (charset === "utf-8" || charset === "us-ascii") return buf.toString("utf8");
