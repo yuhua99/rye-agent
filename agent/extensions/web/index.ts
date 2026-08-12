@@ -9,6 +9,7 @@ import { Container, Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import { lookup as dnsLookup } from "node:dns";
 import { isIP } from "node:net";
+import iconv from "iconv-lite";
 import { Agent, fetch as undiciFetch } from "undici";
 import {
   createHopSignal,
@@ -214,11 +215,115 @@ function hopTimeoutMs(deadline: number): number {
   return Math.min(HOP_TIMEOUT_MS, remaining);
 }
 
+type StoredCookie = {
+  name: string;
+  value: string;
+  domain: string;
+  hostOnly: boolean;
+  path: string;
+  secure: boolean;
+};
+
+type CookieJar = {
+  absorb: (url: URL, response: FetchResponse) => void;
+  header: (url: URL) => string | undefined;
+};
+
+function createCookieJar(): CookieJar {
+  const cookies: StoredCookie[] = [];
+
+  function absorb(url: URL, response: FetchResponse) {
+    const raws =
+      typeof response.headers.getSetCookie === "function"
+        ? response.headers.getSetCookie()
+        : [];
+    const host = url.hostname.toLowerCase();
+    for (const raw of raws) {
+      const eq = raw.indexOf("=");
+      if (eq <= 0) continue;
+      const name = raw.slice(0, eq).trim();
+      if (!name) continue;
+      const value = (raw.slice(eq + 1).split(";", 1)[0] ?? "").trim();
+      let domain = host;
+      let hostOnly = true;
+      let path = "/";
+      let secure = false;
+      let rejected = false;
+      for (const part of raw.split(";").slice(1)) {
+        const attrEq = part.indexOf("=");
+        const key = (attrEq === -1 ? part : part.slice(0, attrEq))
+          .trim()
+          .toLowerCase();
+        const attrVal = attrEq === -1 ? "" : part.slice(attrEq + 1).trim();
+        if (key === "domain" && attrVal) {
+          const candidate = attrVal.replace(/^\./, "").toLowerCase();
+          if (host !== candidate && !host.endsWith(`.${candidate}`)) {
+            rejected = true;
+            break;
+          }
+          domain = candidate;
+          hostOnly = false;
+        } else if (key === "path" && attrVal.startsWith("/")) {
+          path = attrVal;
+        } else if (key === "secure") {
+          secure = true;
+        }
+      }
+      if (rejected) continue;
+      if (name.startsWith("__Secure-") || name.startsWith("__Host-")) {
+        if (url.protocol !== "https:") continue;
+        secure = true;
+      }
+      if (name.startsWith("__Host-")) {
+        domain = host;
+        hostOnly = true;
+        path = "/";
+      }
+      const index = cookies.findIndex(
+        (cookie) =>
+          cookie.name === name &&
+          cookie.domain === domain &&
+          cookie.path === path,
+      );
+      const next = { name, value, domain, hostOnly, path, secure };
+      if (index >= 0) cookies[index] = next;
+      else cookies.push(next);
+    }
+  }
+
+  function header(url: URL): string | undefined {
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname || "/";
+    const parts: string[] = [];
+    for (const cookie of cookies) {
+      if (cookie.secure && url.protocol !== "https:") continue;
+      if (cookie.hostOnly) {
+        if (host !== cookie.domain) continue;
+      } else if (host !== cookie.domain && !host.endsWith(`.${cookie.domain}`)) {
+        continue;
+      }
+      if (!pathMatches(cookie.path, path)) continue;
+      parts.push(`${cookie.name}=${cookie.value}`);
+    }
+    return parts.length > 0 ? parts.join("; ") : undefined;
+  }
+
+  return { absorb, header };
+}
+
+function pathMatches(cookiePath: string, requestPath: string): boolean {
+  if (cookiePath === "/") return true;
+  if (requestPath === cookiePath) return true;
+  const prefix = cookiePath.endsWith("/") ? cookiePath : `${cookiePath}/`;
+  return requestPath.startsWith(prefix);
+}
+
 async function fetchWithPolicy(
   url: URL,
   signal: AbortSignal,
   format: WebfetchParams["format"],
   deadline: number,
+  jar: CookieJar,
 ): Promise<FetchResult> {
   let current = url;
   let previousOrigin = url.origin;
@@ -235,26 +340,29 @@ async function fetchWithPolicy(
       signal,
       hopTimeoutMs(deadline),
     );
+    const headers: Record<string, string> = {
+      Accept: acceptForFormat(format),
+      "User-Agent": DEFAULT_USER_AGENT,
+      "Accept-Language": "en-US,en;q=0.9",
+      "Upgrade-Insecure-Requests": "1",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site":
+        index === 0
+          ? "none"
+          : current.origin === previousOrigin
+            ? "same-origin"
+            : "cross-site",
+      "Sec-Fetch-User": "?1",
+    };
+    const cookie = jar.header(current);
+    if (cookie) headers.Cookie = cookie;
     let response: FetchResponse;
     try {
       response = await undiciFetch(current.toString(), {
         signal: hopSignal,
         redirect: "manual",
-        headers: {
-          Accept: acceptForFormat(format),
-          "User-Agent": DEFAULT_USER_AGENT,
-          "Accept-Language": "en-US,en;q=0.9",
-          "Upgrade-Insecure-Requests": "1",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site":
-            index === 0
-              ? "none"
-              : current.origin === previousOrigin
-                ? "same-origin"
-                : "cross-site",
-          "Sec-Fetch-User": "?1",
-        },
+        headers,
         dispatcher: safeAgent,
       });
     } catch (error) {
@@ -262,6 +370,7 @@ async function fetchWithPolicy(
       throw error;
     }
     cleanup();
+    jar.absorb(current, response);
     const location = response.headers.get("location");
     if (response.status >= 300 && response.status < 400 && location) {
       await response.body?.cancel();
@@ -304,10 +413,11 @@ async function fetchWithRetry(
   format: WebfetchParams["format"],
   deadline: number,
 ): Promise<FetchResult> {
+  const jar = createCookieJar();
   let retries = 0;
   while (true) {
     try {
-      const result = await fetchWithPolicy(url, signal, format, deadline);
+      const result = await fetchWithPolicy(url, signal, format, deadline, jar);
       if (result.response.status >= 500 && retries < 2) {
         await result.response.body?.cancel();
         await waitForRetry(
@@ -338,8 +448,8 @@ async function fetchWithRetry(
 async function readBodyCapped(
   response: FetchResponse,
   maxBytes: number,
-): Promise<string> {
-  if (!response.body) return "";
+): Promise<Buffer> {
+  if (!response.body) return Buffer.alloc(0);
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -356,7 +466,40 @@ async function readBodyCapped(
     chunks.push(value);
     total += value.byteLength;
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks);
+}
+
+function charsetFromContentType(contentType: string | null): string | undefined {
+  const match = contentType?.match(/charset\s*=\s*("?)([^";\s]+)\1/i);
+  return match?.[2]?.toLowerCase();
+}
+
+function charsetFromHtmlMeta(buf: Buffer): string | undefined {
+  const head = buf.subarray(0, Math.min(buf.length, 4096)).toString("latin1");
+  const match =
+    head.match(/<meta\b[^>]*\bcharset\s*=\s*["']?\s*([^"'\s/>]+)/i) ||
+    head.match(
+      /<meta\b[^>]*\bcontent\s*=\s*["'][^"']*charset\s*=\s*([^"'\s/>]+)/i,
+    );
+  return match?.[1]?.toLowerCase();
+}
+
+function normalizeCharset(charset: string): string {
+  if (charset === "gb2312" || charset === "gbk") return "gb18030";
+  if (charset === "shift-jis" || charset === "sjis") return "shift_jis";
+  if (charset === "utf8") return "utf-8";
+  return charset;
+}
+
+function decodeBody(buf: Buffer, contentType: string | null): string {
+  const raw =
+    charsetFromContentType(contentType) ||
+    charsetFromHtmlMeta(buf) ||
+    "utf-8";
+  const charset = normalizeCharset(raw);
+  if (charset === "utf-8" || charset === "us-ascii") return buf.toString("utf8");
+  if (!iconv.encodingExists(charset)) return buf.toString("utf8");
+  return iconv.decode(buf, charset);
 }
 
 function classifyBlock(
@@ -658,19 +801,21 @@ export default function (pi: ExtensionAPI) {
           params.format,
           deadline,
         );
+        const contentTypeHeader = response.headers.get("content-type");
         if (!response.ok) {
-          const errorBody = (
-            await readBodyCapped(response, MAX_ERROR_BODY_BYTES)
+          const errorBody = decodeBody(
+            await readBodyCapped(response, MAX_ERROR_BODY_BYTES),
+            contentTypeHeader,
           )
             .replace(/[\u0000-\u001f\u007f]+/g, " ")
             .trim();
           throw requestError(response, url, errorBody);
         }
-        const contentType = response.headers
-          .get("content-type")
-          ?.split(";")[0]
-          ?.trim();
-        const body = await readBodyCapped(response, MAX_RESPONSE_BYTES);
+        const contentType = contentTypeHeader?.split(";")[0]?.trim();
+        const body = decodeBody(
+          await readBodyCapped(response, MAX_RESPONSE_BYTES),
+          contentTypeHeader,
+        );
         const wantsRaw = params.raw ?? false;
         const isHtml = utils.isHtmlContentType(contentType);
         const format = params.format ?? "markdown";
