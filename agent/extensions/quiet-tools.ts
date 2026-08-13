@@ -58,8 +58,10 @@ function detail(toolName: string, args: Record<string, unknown>): string {
 function makeRenderCall(toolName: string): RenderCall {
   return (args, theme, context) => {
     const state = context.state as State;
-    const d = detail(toolName, args as Record<string, unknown>);
-    let line = `${symbol(state.status, theme)} ${theme.fg("dim", toolName)} ${theme.fg("accent", args.intent)}`;
+    const callArgs = args as Record<string, unknown>;
+    const d = detail(toolName, callArgs);
+    const intent = typeof callArgs.intent === "string" ? callArgs.intent : "";
+    let line = `${symbol(state.status, theme)} ${theme.fg("accent", intent)} ${theme.fg("dim", toolName)}`;
     if (d) line += ` ${theme.fg("dim", d)}`;
     if (state.status === "error" && state.err) {
       line += `\n  ${theme.fg("error", state.err)}`;
@@ -109,7 +111,7 @@ export default function (pi: ExtensionAPI) {
           .properties,
         intent: Type.String({
           description:
-            "Required short label shown in the UI: why this call is being made.",
+            "Required short UI label for why this call is being made. Match the user's language.",
         }),
       }),
       prepareArguments: def.prepareArguments
