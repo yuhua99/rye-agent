@@ -1,6 +1,7 @@
 import { formatSize, truncateHead } from "@earendil-works/pi-coding-agent";
 import { randomBytes } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import type { ReadableStream } from "node:stream/web";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
