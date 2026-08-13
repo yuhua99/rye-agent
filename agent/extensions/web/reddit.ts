@@ -51,6 +51,47 @@ function permalink(data: RecordValue): string | undefined {
     : `${REDDIT_BASE}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
+function isRedditShareUrl(url: URL): boolean {
+  return isRedditUrl(url) && /^\/r\/[^/]+\/s\/[^/]+\/?$/.test(url.pathname);
+}
+
+function redditHeaders(): Record<string, string> {
+  return {
+    Accept: "application/json",
+    "User-Agent": USER_AGENT,
+    "Accept-Language": "en-US,en;q=0.9",
+    Cookie: loadCookieHeader(),
+  };
+}
+
+async function resolveRedditShareUrl(url: URL, signal: AbortSignal): Promise<URL> {
+  const request = new URL(url);
+  request.protocol = "https:";
+  const response = await fetch(request, {
+    signal,
+    redirect: "manual",
+    headers: redditHeaders(),
+  });
+  const status = response.status;
+  const location = response.headers.get("location");
+  await response.body?.cancel();
+  if (status < 300 || status >= 400)
+    throw new Error(`Reddit share link did not redirect (HTTP ${status}).`);
+
+  if (!location)
+    throw new Error(`Reddit share link redirect missing Location header (HTTP ${status}).`);
+
+  let resolved: URL;
+  try {
+    resolved = new URL(location, request);
+  } catch {
+    throw new Error(`Reddit share link redirect has an invalid Location header (HTTP ${status}).`);
+  }
+  if (!isRedditUrl(resolved))
+    throw new Error(`Reddit share link redirected to a non-Reddit URL (HTTP ${status}).`);
+  return resolved;
+}
+
 function normalizeRedditUrl(url: URL): URL {
   if (!isRedditUrl(url)) throw new Error("Reddit fetch requires a Reddit URL.");
   if (url.protocol !== "http:" && url.protocol !== "https:")
@@ -198,16 +239,12 @@ function isHtml(body: string, contentType: string | null): boolean {
 }
 
 export async function fetchReddit(url: URL, signal: AbortSignal): Promise<RedditFetchResult> {
-  const request = normalizeRedditUrl(url);
+  const resolvedUrl = isRedditShareUrl(url) ? await resolveRedditShareUrl(url, signal) : url;
+  const request = normalizeRedditUrl(resolvedUrl);
   const response = await fetch(request, {
     signal,
     redirect: "manual",
-    headers: {
-      Accept: "application/json",
-      "User-Agent": USER_AGENT,
-      "Accept-Language": "en-US,en;q=0.9",
-      Cookie: loadCookieHeader(),
-    },
+    headers: redditHeaders(),
   });
   const contentType = response.headers.get("content-type");
   const body = (
