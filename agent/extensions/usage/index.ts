@@ -1,5 +1,5 @@
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
-import { Box, Text } from "@earendil-works/pi-tui";
+import { Box, Text, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { anthropic } from "./anthropic.js";
 import { codex } from "./codex.js";
 import type { UsageSnapshot } from "./types.js";
@@ -62,6 +62,49 @@ function formatSnapshot(usage: UsageSnapshot, theme?: Theme): string {
 	return lines.join("\n");
 }
 
+class UsageGrid {
+	constructor(private cards: string[]) {}
+
+	render(width: number): string[] {
+		if (width <= 0) return [];
+
+		const rows: { lines: string[]; width: number }[][] = [];
+		let row: { lines: string[]; width: number }[] = [];
+		let rowWidth = 0;
+		for (const card of this.cards) {
+			let lines = card.split("\n");
+			let cardWidth = Math.max(...lines.map(visibleWidth));
+			if (cardWidth > width) {
+				lines = wrapTextWithAnsi(card, width);
+				cardWidth = Math.max(...lines.map(visibleWidth));
+			}
+
+			if (row.length > 0 && rowWidth + 2 + cardWidth > width) {
+				rows.push(row);
+				row = [];
+				rowWidth = 0;
+			}
+			row.push({ lines, width: cardWidth });
+			rowWidth += (rowWidth > 0 ? 2 : 0) + cardWidth;
+		}
+		if (row.length > 0) rows.push(row);
+
+		return rows.flatMap((cards, rowIndex) => [
+			...(rowIndex > 0 ? [""] : []),
+			...Array.from({ length: Math.max(...cards.map((card) => card.lines.length)) }, (_, lineIndex) =>
+				cards
+					.map((card) => {
+						const line = card.lines[lineIndex] ?? "";
+						return line + " ".repeat(card.width - visibleWidth(line));
+					})
+					.join("  "),
+			),
+		]);
+	}
+
+	invalidate() {}
+}
+
 export default function (pi: ExtensionAPI) {
 	pi.registerEntryRenderer<UsageSnapshot[]>("usage", (entry, _opts, theme) => {
 		const snapshots = entry.data ?? [];
@@ -71,7 +114,7 @@ export default function (pi: ExtensionAPI) {
 			return box;
 		}
 		const blocks = snapshots.map((snapshot) => formatSnapshot(snapshot, theme));
-		box.addChild(new Text(blocks.join("\n\n"), 0, 0));
+		box.addChild(new UsageGrid(blocks));
 		return box;
 	});
 
