@@ -18,6 +18,12 @@ function formatPercent(value: number): string {
   return `${Math.round(value)}%`.padStart(4);
 }
 
+function usageColor(usedPercent: number): "success" | "warning" | "error" {
+  if (usedPercent < 70) return "success";
+  if (usedPercent < 90) return "warning";
+  return "error";
+}
+
 function renderCircles(percent: number): string {
   const clamped = Math.max(0, Math.min(100, percent));
   const filled = clamped / 20;
@@ -41,10 +47,11 @@ function formatWindow(
   const circles = renderCircles(window.usedPercent);
   const suffix = formatPercent(window.usedPercent);
   if (!theme) return `  ${label} ${circles} ${suffix}${reset}`;
+  const color = usageColor(window.usedPercent);
   const resetText = window.resetDescription
     ? theme.fg("dim", `  resets ${window.resetDescription}`)
     : "";
-  return `  ${theme.fg("muted", label)} ${theme.fg("muted", circles)} ${theme.fg("muted", suffix)}${resetText}`;
+  return `  ${theme.fg("muted", label)} ${theme.fg(color, circles)} ${theme.fg(color, suffix)}${resetText}`;
 }
 
 function formatSnapshot(usage: UsageSnapshot, theme?: Theme): string {
