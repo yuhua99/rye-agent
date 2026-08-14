@@ -127,8 +127,8 @@ export const xai: UsageProvider = {
 		}
 
 		const windows: RateWindow[] = [];
-		const monthly = monthlyRes.ok && monthlyRes.data ? parseMonthly(monthlyRes.data.config) : undefined;
-		const weekly = weeklyRes.ok && weeklyRes.data ? parseWeekly(weeklyRes.data.config) : undefined;
+		const monthly = monthlyRes.ok && monthlyRes.data?.config ? parseMonthly(monthlyRes.data.config) : undefined;
+		const weekly = weeklyRes.ok && weeklyRes.data?.config ? parseWeekly(weeklyRes.data.config) : undefined;
 		if (monthly) windows.push(monthly);
 		if (weekly) windows.push(weekly);
 
