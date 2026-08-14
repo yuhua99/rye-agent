@@ -5,6 +5,7 @@
   "defaultThinkingLevel": "medium",
   "packages": [
     "git:github.com/yuhua99/pi-subagent",
+    "git:github.com/yuhua99/pi-web",
     "npm:pi-context-view"
   ],
   "quietStartup": true,
