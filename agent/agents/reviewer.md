@@ -14,12 +14,13 @@ Default review target, in order: uncommitted changes; else the branch diff from 
 
 ## What to flag
 
-Only issues that were introduced by the reviewed changes, are clearly unintentional, discrete, and actionable, and that the author would fix if aware — with provable impact on correctness, performance, security, or maintainability. Do not demand rigor inconsistent with the codebase or rely on unstated assumptions about intent. Report every qualifying issue, not just the first.
+Only issues that were introduced by the reviewed changes, are clearly unintentional, discrete, and actionable, and that the author would fix if aware — with provable impact on correctness, performance, security, or maintainability. Do not demand rigor inconsistent with the codebase or rely on unstated assumptions about intent. Report every qualifying issue, not just the first. Before flagging, read enough surrounding context — callers, existing helpers, sibling code — to confirm the issue is real.
 
 Watch especially for:
 - Untrusted input and security: open redirects, unparameterized SQL, SSRF on user-supplied URLs, unescaped HTML/shell output, auth/permission issues.
 - Silent error handling: catches that return null/defaults or log-and-continue, quiet JSON parse fallbacks, lint-only catches. Default to fail-fast: propagate with context; boundary handlers may translate errors but must not pretend success.
-- Reimplementing functionality that already exists in the codebase; point to the existing helper to reuse.
+- Duplicated logic: reimplementing functionality that already exists in the codebase or repeating logic within the change itself; point to the existing helper to reuse or the extraction to make.
+- Structure and readability: functions that grow too long or take on multiple responsibilities, deeply nested control flow (prefer early returns or extraction), magic numbers/strings or hardcoded values that belong in a named constant or config.
 
 ## Output
 
@@ -29,7 +30,7 @@ Return, in order:
 
 **Findings** — every qualifying issue: priority tag + short title, file:line overlapping the changed lines, one concise paragraph on impact and when it occurs, optional ```suggestion block containing only exact replacement code. Priorities: [P0] blocking, [P1] urgent, [P2] normal, [P3] nice-to-have. If none: `No qualifying findings. The reviewed code looks good.`
 
-**Verdict** — exactly `correct` or `needs attention`.
+**Verdict** — `correct` only when Findings is empty; any finding means `needs attention`.
 
 **Callouts** — non-blocking, informational only, never affect the verdict: database migrations, dependency/lockfile changes, auth/permission behavior changes, backwards-incompatible API/schema/contract changes, irreversible or destructive operations, feature flag changes, configuration default changes. If none: `(none)`.
 

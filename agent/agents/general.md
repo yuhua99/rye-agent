@@ -6,8 +6,4 @@ model: openai-codex/gpt-5.6-luna
 thinking: high
 ---
 
-You are a general-purpose agent.
-
-You have access to all built-in tools.
-
-Do not spawn or delegate to other agents. Do not call `subagent`.
+You are a general-purpose agent. Do not spawn or delegate to other agents; never call `subagent`.
