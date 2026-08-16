@@ -16,14 +16,9 @@ export interface UsageSnapshot {
 	error?: string;
 }
 
-export interface FetchResult {
-	usage: UsageSnapshot;
-	retryAfterMs?: number;
-}
-
 export interface UsageProvider {
 	readonly name: ProviderName;
 	readonly displayName: string;
 	hasCredentials(): boolean;
-	fetchUsage(): Promise<FetchResult>;
+	fetchUsage(): Promise<UsageSnapshot>;
 }

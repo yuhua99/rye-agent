@@ -49,25 +49,15 @@ export function createTimeoutController(timeoutMs: number): {
   return { controller, clear: () => clearTimeout(timeoutId) };
 }
 
-export function parseRetryAfter(res: Response): number | undefined {
-  const header = res.headers.get("retry-after");
-  if (!header) return undefined;
-
-  const seconds = Number(header);
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
-
-  const date = new Date(header);
-  if (!Number.isNaN(date.getTime())) {
-    const ms = date.getTime() - Date.now();
-    return ms > 0 ? ms : undefined;
-  }
-  return undefined;
+export function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
 }
 
-export function toPercent(value: number): number {
-  if (!Number.isFinite(value) || value < 0) return 0;
-  const percent = value <= 1 ? value * 100 : value;
-  return Math.max(0, Math.min(100, percent));
+export function parseDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 export function errorMessage(

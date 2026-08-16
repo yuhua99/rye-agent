@@ -7,10 +7,10 @@ import {
 } from "@earendil-works/pi-tui";
 import { anthropic } from "./anthropic.js";
 import { codex } from "./codex.js";
-import type { UsageSnapshot } from "./types.js";
+import { PROVIDERS, type UsageSnapshot } from "./types.js";
 import { xai } from "./xai.js";
 
-const PROVIDERS = [anthropic, codex, xai];
+const providers = { anthropic, codex, xai };
 const ENTRY_TYPE = "usage";
 const CIRCLES = ["○", "◔", "◑", "◕", "●"];
 
@@ -133,8 +133,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("usage", {
     description: "Show subscription usage for logged-in providers",
     handler: async (_args, ctx) => {
-      const loggedIn = PROVIDERS.filter((provider) =>
-        provider.hasCredentials(),
+      const loggedIn = PROVIDERS.map((name) => providers[name]).filter(
+        (provider) => provider.hasCredentials(),
       );
       if (loggedIn.length === 0) {
         ctx.ui.notify("No logged-in providers", "warning");
@@ -150,7 +150,7 @@ export default function (pi: ExtensionAPI) {
         const snapshots = await Promise.all(
           loggedIn.map(async (provider) => {
             try {
-              return (await provider.fetchUsage()).usage;
+              return await provider.fetchUsage();
             } catch (error) {
               return {
                 provider: provider.name,

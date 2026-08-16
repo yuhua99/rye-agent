@@ -1,5 +1,5 @@
-import { API_TIMEOUT_MS, createTimeoutController, errorMessage, formatReset, home, parseRetryAfter, readAuth, readJson } from "./util.js";
-import type { FetchResult, RateWindow, UsageProvider } from "./types.js";
+import { API_TIMEOUT_MS, clampPercent, createTimeoutController, errorMessage, formatReset, home, readAuth, readJson } from "./util.js";
+import type { RateWindow, UsageProvider, UsageSnapshot } from "./types.js";
 
 function loadCredentials(): { accessToken?: string; accountId?: string } {
 	const auth = readAuth();
@@ -41,7 +41,7 @@ function toWindow(
 	const hours = Math.round((window.limit_window_seconds || fallbackSeconds) / 3600);
 	return {
 		label: windowLabel(hours),
-		usedPercent: window.used_percent || 0,
+		usedPercent: clampPercent(window.used_percent || 0),
 		resetDescription: resetDate ? formatReset(resetDate) : undefined,
 		resetAt: resetDate?.toISOString(),
 	};
@@ -55,10 +55,10 @@ export const codex: UsageProvider = {
 		return Boolean(loadCredentials().accessToken);
 	},
 
-	async fetchUsage(): Promise<FetchResult> {
+	async fetchUsage(): Promise<UsageSnapshot> {
 		const { accessToken, accountId } = loadCredentials();
 		if (!accessToken) {
-			return { usage: { provider: "codex", displayName: "Codex Plan", windows: [], error: "No credentials" } };
+			return { provider: "codex", displayName: "Codex Plan", windows: [], error: "No credentials" };
 		}
 
 		const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
@@ -76,10 +76,7 @@ export const codex: UsageProvider = {
 			clear();
 
 			if (!res.ok) {
-				return {
-					usage: { provider: "codex", displayName: "Codex Plan", windows: [], error: `HTTP ${res.status}` },
-					retryAfterMs: parseRetryAfter(res),
-				};
+				return { provider: "codex", displayName: "Codex Plan", windows: [], error: `HTTP ${res.status}` };
 			}
 
 			const data = (await res.json()) as {
@@ -99,16 +96,14 @@ export const codex: UsageProvider = {
 				windows.push(toWindow(data.rate_limit.secondary_window, 86400));
 			}
 
-			return { usage: { provider: "codex", displayName: "Codex Plan", windows } };
+			return { provider: "codex", displayName: "Codex Plan", windows };
 		} catch (error) {
 			clear();
 			return {
-				usage: {
-					provider: "codex",
-					displayName: "Codex Plan",
-					windows: [],
-					error: errorMessage(error),
-				},
+				provider: "codex",
+				displayName: "Codex Plan",
+				windows: [],
+				error: errorMessage(error),
 			};
 		}
 	},

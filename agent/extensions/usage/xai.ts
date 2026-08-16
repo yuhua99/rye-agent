@@ -1,5 +1,5 @@
-import { API_TIMEOUT_MS, createTimeoutController, errorMessage, formatReset, home, parseRetryAfter, readAuth, readJson } from "./util.js";
-import type { FetchResult, RateWindow, UsageProvider } from "./types.js";
+import { API_TIMEOUT_MS, clampPercent, createTimeoutController, errorMessage, formatReset, home, parseDate, readAuth, readJson } from "./util.js";
+import type { RateWindow, UsageProvider, UsageSnapshot } from "./types.js";
 
 const BILLING_BASE = "https://cli-chat-proxy.grok.com/v1/billing";
 
@@ -33,25 +33,19 @@ async function fetchJson(
 	status?: number;
 	data?: { config?: Parameters<typeof parseMonthly>[0] & Parameters<typeof parseWeekly>[0] };
 	error?: string;
-	retryAfterMs?: number;
 }> {
 	const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
 	try {
 		const res = await fetch(url, { headers, signal: controller.signal });
 		clear();
 		if (!res.ok) {
-			return { ok: false, status: res.status, error: `HTTP ${res.status}`, retryAfterMs: parseRetryAfter(res) };
+			return { ok: false, status: res.status, error: `HTTP ${res.status}` };
 		}
 		return { ok: true, status: res.status, data: (await res.json()) as { config?: Parameters<typeof parseMonthly>[0] & Parameters<typeof parseWeekly>[0] } };
 	} catch (error) {
 		clear();
 		return { ok: false, error: errorMessage(error) };
 	}
-}
-
-function clampPercent(value: number): number {
-	if (!Number.isFinite(value)) return 0;
-	return Math.max(0, Math.min(100, value));
 }
 
 function parseMonthly(config: {
@@ -62,10 +56,7 @@ function parseMonthly(config: {
 	const limit = config.monthlyLimit?.val;
 	const used = config.used?.val;
 	if (typeof limit !== "number" || limit <= 0 || typeof used !== "number" || used < 0) return undefined;
-	const resetDate =
-		typeof config.billingPeriodEnd === "string" && Number.isFinite(Date.parse(config.billingPeriodEnd))
-			? new Date(config.billingPeriodEnd)
-			: undefined;
+	const resetDate = parseDate(config.billingPeriodEnd);
 	return {
 		label: "Month",
 		usedPercent: clampPercent((used / limit) * 100),
@@ -84,7 +75,7 @@ function parseWeekly(config: {
 		(typeof config.billingPeriodEnd === "string" && config.billingPeriodEnd) ||
 		(typeof config.currentPeriod.end === "string" && config.currentPeriod.end) ||
 		undefined;
-	const resetDate = end && Number.isFinite(Date.parse(end)) ? new Date(end) : undefined;
+	const resetDate = parseDate(end);
 	const raw = config.creditUsagePercent;
 	return {
 		label: "Week",
@@ -102,10 +93,10 @@ export const xai: UsageProvider = {
 		return Boolean(loadToken());
 	},
 
-	async fetchUsage(): Promise<FetchResult> {
+	async fetchUsage(): Promise<UsageSnapshot> {
 		const accessToken = loadToken();
 		if (!accessToken) {
-			return { usage: { provider: "xai", displayName: "Grok", windows: [], error: "No credentials" } };
+			return { provider: "xai", displayName: "Grok", windows: [], error: "No credentials" };
 		}
 
 		const headers = {
@@ -119,13 +110,6 @@ export const xai: UsageProvider = {
 			fetchJson(`${BILLING_BASE}?format=credits`, headers),
 		]);
 
-		if (monthlyRes.status === 401 || monthlyRes.status === 403) {
-			return {
-				usage: { provider: "xai", displayName: "Grok", windows: [], error: `HTTP ${monthlyRes.status}` },
-				retryAfterMs: monthlyRes.retryAfterMs,
-			};
-		}
-
 		const windows: RateWindow[] = [];
 		const monthly = monthlyRes.ok && monthlyRes.data?.config ? parseMonthly(monthlyRes.data.config) : undefined;
 		const weekly = weeklyRes.ok && weeklyRes.data?.config ? parseWeekly(weeklyRes.data.config) : undefined;
@@ -133,17 +117,16 @@ export const xai: UsageProvider = {
 		if (weekly) windows.push(weekly);
 
 		if (windows.length === 0) {
-			const status = weeklyRes.status ?? monthlyRes.status;
-			const error =
-				weeklyRes.error ?? monthlyRes.error ?? (status ? `HTTP ${status}` : "No usage windows returned");
-			return {
-				usage: { provider: "xai", displayName: "Grok", windows: [], error },
-				retryAfterMs: weeklyRes.retryAfterMs ?? monthlyRes.retryAfterMs,
-			};
+			const monthlyAuthFailure = monthlyRes.status === 401 || monthlyRes.status === 403;
+			const weeklyAuthFailure = weeklyRes.status === 401 || weeklyRes.status === 403;
+			if (monthlyAuthFailure && weeklyAuthFailure) {
+				return { provider: "xai", displayName: "Grok", windows: [], error: `HTTP ${monthlyRes.status}` };
+			}
+			const result = weeklyAuthFailure ? monthlyRes : weeklyRes;
+			const other = weeklyAuthFailure ? weeklyRes : monthlyRes;
+			const error = result.error ?? other.error ?? "No usage windows returned";
+			return { provider: "xai", displayName: "Grok", windows: [], error };
 		}
-		return {
-			usage: { provider: "xai", displayName: "Grok", windows },
-			retryAfterMs: weeklyRes.retryAfterMs ?? monthlyRes.retryAfterMs,
-		};
+		return { provider: "xai", displayName: "Grok", windows };
 	},
 };

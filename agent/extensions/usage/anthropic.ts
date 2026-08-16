@@ -1,5 +1,5 @@
-import { API_TIMEOUT_MS, createTimeoutController, errorMessage, formatReset, home, keychainPassword, parseRetryAfter, readAuth, readJson, toPercent } from "./util.js";
-import type { FetchResult, RateWindow, UsageProvider } from "./types.js";
+import { API_TIMEOUT_MS, clampPercent, createTimeoutController, errorMessage, formatReset, home, keychainPassword, parseDate, readAuth, readJson } from "./util.js";
+import type { RateWindow, UsageProvider, UsageSnapshot } from "./types.js";
 
 function loadToken(): string | undefined {
 	const auth = readAuth();
@@ -34,6 +34,11 @@ function formatExtraUsageCredits(credits: number): string {
 	return (credits / 100).toFixed(2);
 }
 
+function toPercent(value: number): number {
+	if (!Number.isFinite(value) || value < 0) return 0;
+	return clampPercent(value <= 1 ? value * 100 : value);
+}
+
 export const anthropic: UsageProvider = {
 	name: "anthropic",
 	displayName: "Claude Plan",
@@ -42,9 +47,9 @@ export const anthropic: UsageProvider = {
 		return Boolean(loadToken());
 	},
 
-	async fetchUsage(): Promise<FetchResult> {
+	async fetchUsage(): Promise<UsageSnapshot> {
 		const token = loadToken();
-		if (!token) return { usage: { provider: "anthropic", displayName: "Claude Plan", windows: [], error: "No credentials" } };
+		if (!token) return { provider: "anthropic", displayName: "Claude Plan", windows: [], error: "No credentials" };
 
 		const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
 		try {
@@ -58,10 +63,7 @@ export const anthropic: UsageProvider = {
 			clear();
 
 			if (!res.ok) {
-				return {
-					usage: { provider: "anthropic", displayName: "Claude Plan", windows: [], error: `HTTP ${res.status}` },
-					retryAfterMs: parseRetryAfter(res),
-				};
+				return { provider: "anthropic", displayName: "Claude Plan", windows: [], error: `HTTP ${res.status}` };
 			}
 
 			const data = (await res.json()) as {
@@ -78,7 +80,7 @@ export const anthropic: UsageProvider = {
 			const windows: RateWindow[] = [];
 
 			if (data.five_hour?.utilization !== undefined) {
-				const resetAt = data.five_hour.resets_at ? new Date(data.five_hour.resets_at) : undefined;
+				const resetAt = parseDate(data.five_hour.resets_at);
 				windows.push({
 					label: "5h",
 					usedPercent: toPercent(data.five_hour.utilization),
@@ -88,7 +90,7 @@ export const anthropic: UsageProvider = {
 			}
 
 			if (data.seven_day?.utilization !== undefined) {
-				const resetAt = data.seven_day.resets_at ? new Date(data.seven_day.resets_at) : undefined;
+				const resetAt = parseDate(data.seven_day.resets_at);
 				windows.push({
 					label: "Week",
 					usedPercent: toPercent(data.seven_day.utilization),
@@ -113,16 +115,14 @@ export const anthropic: UsageProvider = {
 				});
 			}
 
-			return { usage: { provider: "anthropic", displayName: "Claude Plan", windows } };
+			return { provider: "anthropic", displayName: "Claude Plan", windows };
 		} catch (error) {
 			clear();
 			return {
-				usage: {
-					provider: "anthropic",
-					displayName: "Claude Plan",
-					windows: [],
-					error: errorMessage(error),
-				},
+				provider: "anthropic",
+				displayName: "Claude Plan",
+				windows: [],
+				error: errorMessage(error),
 			};
 		}
 	},
