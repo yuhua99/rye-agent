@@ -49,7 +49,7 @@ function toWindow(
 
 export const codex: UsageProvider = {
 	name: "codex",
-	displayName: "Codex Plan",
+	displayName: "Codex",
 
 	hasCredentials() {
 		return Boolean(loadCredentials().accessToken);
@@ -58,7 +58,7 @@ export const codex: UsageProvider = {
 	async fetchUsage(): Promise<UsageSnapshot> {
 		const { accessToken, accountId } = loadCredentials();
 		if (!accessToken) {
-			return { provider: "codex", displayName: "Codex Plan", windows: [], error: "No credentials" };
+			return { provider: "codex", displayName: "Codex", windows: [], error: "No credentials" };
 		}
 
 		const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
@@ -76,7 +76,7 @@ export const codex: UsageProvider = {
 			clear();
 
 			if (!res.ok) {
-				return { provider: "codex", displayName: "Codex Plan", windows: [], error: `HTTP ${res.status}` };
+				return { provider: "codex", displayName: "Codex", windows: [], error: `HTTP ${res.status}` };
 			}
 
 			const data = (await res.json()) as {
@@ -96,12 +96,12 @@ export const codex: UsageProvider = {
 				windows.push(toWindow(data.rate_limit.secondary_window, 86400));
 			}
 
-			return { provider: "codex", displayName: "Codex Plan", windows };
+			return { provider: "codex", displayName: "Codex", windows };
 		} catch (error) {
 			clear();
 			return {
 				provider: "codex",
-				displayName: "Codex Plan",
+				displayName: "Codex",
 				windows: [],
 				error: errorMessage(error),
 			};

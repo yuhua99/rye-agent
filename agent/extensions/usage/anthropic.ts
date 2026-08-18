@@ -41,7 +41,7 @@ function toPercent(value: number): number {
 
 export const anthropic: UsageProvider = {
 	name: "anthropic",
-	displayName: "Claude Plan",
+	displayName: "Claude",
 
 	hasCredentials() {
 		return Boolean(loadToken());
@@ -49,7 +49,7 @@ export const anthropic: UsageProvider = {
 
 	async fetchUsage(): Promise<UsageSnapshot> {
 		const token = loadToken();
-		if (!token) return { provider: "anthropic", displayName: "Claude Plan", windows: [], error: "No credentials" };
+		if (!token) return { provider: "anthropic", displayName: "Claude", windows: [], error: "No credentials" };
 
 		const { controller, clear } = createTimeoutController(API_TIMEOUT_MS);
 		try {
@@ -63,7 +63,7 @@ export const anthropic: UsageProvider = {
 			clear();
 
 			if (!res.ok) {
-				return { provider: "anthropic", displayName: "Claude Plan", windows: [], error: `HTTP ${res.status}` };
+				return { provider: "anthropic", displayName: "Claude", windows: [], error: `HTTP ${res.status}` };
 			}
 
 			const data = (await res.json()) as {
@@ -115,12 +115,12 @@ export const anthropic: UsageProvider = {
 				});
 			}
 
-			return { provider: "anthropic", displayName: "Claude Plan", windows };
+			return { provider: "anthropic", displayName: "Claude", windows };
 		} catch (error) {
 			clear();
 			return {
 				provider: "anthropic",
-				displayName: "Claude Plan",
+				displayName: "Claude",
 				windows: [],
 				error: errorMessage(error),
 			};
