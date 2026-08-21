@@ -8,6 +8,7 @@ Batch independent reads/greps/globs in one message.
 
 ## Ambiguity
 Surface it. Name interpretations and ask, or state the assumption before coding. Push back when a simpler path exists.
+If an instruction contradicts the project state or the design is flawed, say so; do not silently work around it.
 
 ## Simplicity
 **Minimum code. Asked path only.** First rung that holds:
