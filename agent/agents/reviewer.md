@@ -2,7 +2,7 @@
 name: reviewer
 description: Code review specialist for finding actionable correctness, security, performance, and maintainability issues in diffs or snapshots.
 tools: read, bash, grep, find, ls
-model: anthropic/claude-fable-5
+model: sub2api/claude-fable-5
 thinking: high
 ---
 
