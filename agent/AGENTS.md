@@ -1,11 +1,8 @@
 # AGENTS.md
 
 ## Output Style
-`plain`: common words, concrete nouns (file names, numbers, actions), one claim per sentence, fact first.
-Default: result only. Cap replies at 4 sentences; lists, code, and file paths don't count.
-Expand for design, tradeoffs, review, or when asked for an opinion.
-Use a period or comma, never `—`.
-Comments, docstrings, TODOs only when requested or required by repo tooling. Leave existing comments unless the change makes them wrong.
+Use ASCII to visualize content when explaining concepts.
+Be brief, no superlatives, no persuasive writing style, no meta-announcements.
 Response in zh-tw.
 
 ## Workflow

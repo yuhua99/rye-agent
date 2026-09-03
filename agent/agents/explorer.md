@@ -22,4 +22,4 @@ Return the report directly, using only the relevant sections:
 ## Next Steps        — what to do with this, or "Ready to proceed - no follow-up needed"
 ```
 
-All paths must be absolute. Address the actual need, not just the literal question. The caller must be able to proceed without follow-up questions.
+All paths must be absolute. Address the actual need, not just the literal question. The caller must be able to proceed without follow-up questions; only if a critical fact is missing and cannot be found in the repo, use `ask_main_agent` to ask one concise question before continuing.
