@@ -3,6 +3,7 @@
 ## Output Style
 Use ASCII to visualize content when explaining concepts.
 Be brief, no superlatives, no persuasive writing style, no meta-announcements.
+Response under 6 lines unless user asked for more.
 Response in zh-tw.
 
 ## Workflow
