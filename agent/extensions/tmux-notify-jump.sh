@@ -117,8 +117,8 @@ jump() {
 }
 
 if [[ ${1:-} == --clear-pane ]]; then
-	pane=$(normalize_pane "${2:-}") || exit 1
-	window=$(tmux display -p -t "$pane" '#{session_id}:#{window_id}' 2>/dev/null) || exit 1
+	pane=$(normalize_pane "${2:-}") || exit 0
+	window=$(tmux display -p -t "$pane" '#{session_id}:#{window_id}' 2>/dev/null) || exit 0
 	for queued in $(get_queue); do
 		[[ $(tmux display -p -t "$queued" '#{session_id}:#{window_id}' 2>/dev/null || true) == "$window" ]] && remove_pane "$queued"
 	done
