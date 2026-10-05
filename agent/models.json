@@ -10,6 +10,7 @@
       "models": [
         {
           "id": "claude-haiku-4-5",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Haiku 4.5",
           "reasoning": true,
           "input": ["text", "image"],
@@ -24,6 +25,7 @@
         },
         {
           "id": "claude-sonnet-5",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Sonnet 5",
           "reasoning": true,
           "input": ["text", "image"],
@@ -38,6 +40,7 @@
         },
         {
           "id": "claude-sonnet-5-5",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Sonnet 5.5",
           "reasoning": true,
           "input": ["text", "image"],
@@ -52,6 +55,7 @@
         },
         {
           "id": "claude-opus-4-6",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Opus 4.6",
           "reasoning": true,
           "input": ["text", "image"],
@@ -66,6 +70,7 @@
         },
         {
           "id": "claude-opus-5-5",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Opus 5.5",
           "reasoning": true,
           "input": ["text", "image"],
@@ -80,6 +85,7 @@
         },
         {
           "id": "claude-fable-5-1",
+          "promptCache": { "short": 300, "long": 3600 },
           "name": "Claude Fable 5.1",
           "reasoning": true,
           "input": ["text", "image"],

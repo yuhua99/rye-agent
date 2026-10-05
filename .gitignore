@@ -5,4 +5,5 @@ agent/npm/
 agent/extensions/*/node_modules/
 agent/bin/
 agent/trust.json
+agent/extensions/herdr-agent-state.ts
 artifacts
