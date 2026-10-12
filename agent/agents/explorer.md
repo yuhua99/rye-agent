@@ -1,7 +1,7 @@
 ---
 name: explorer
 description: Local codebase reconnaissance for locating files, flows, patterns, and conventions in the current repo.
-tools: read, bash, grep, find, ls, codemode
+tools: -edit, -write, +grep, +find, +ls
 model: openai-codex/gpt-6-luna
 thinking: high
 ---

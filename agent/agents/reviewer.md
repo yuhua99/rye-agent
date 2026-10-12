@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Code review specialist for finding actionable correctness, security, performance, and maintainability issues in diffs or snapshots.
-tools: read, bash, grep, find, ls, codemode
+tools: -edit, -write, +grep, +find, +ls
 model: sub2api/claude-opus-5-5
 thinking: high
 ---
