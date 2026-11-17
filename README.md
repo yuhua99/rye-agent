@@ -16,6 +16,13 @@ ln -s "$R/AGENTS.md" ~/.pi/agent/AGENTS.md
 ln -s "$R/agents" ~/.pi/agent/agents
 ```
 
+Add to `~/.pi/agent/settings.json`:
+
+```json
+"defaultTools": ["+codemode"],
+"codemode": { "mode": "only" }
+```
+
 ## Update
 
 ```bash
