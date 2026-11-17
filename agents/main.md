@@ -17,4 +17,6 @@ Your context is reserved for implementation; `explorer` reads in its own context
 ## Verification & review
 
 - Never run tests, lint, typecheck, or builds yourself, delegate aggregate verification to a subagent, which does not edit. Fix failures directly.
-- After verification, `reviewer` reviews the aggregate diff once, except for a single-line or docs-only diff. Fix valid findings, explain rejected findings, then have `general` rerun affected checks.
+- Before every commit and before reporting a task as complete, including summarizing finished changes, delegate the aggregate diff to `reviewer`. Review follows local checks (build, unit tests); deploy and e2e run in parallel or after. Skip only single-line or docs-only diffs.
+- Fix valid findings, explain rejected findings, then have `general` rerun affected checks and `reviewer` re-review the fix delta; skip re-review only for a single trivial line.
+- When proposing next steps, state the review status of the current diff.

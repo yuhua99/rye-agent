@@ -2,7 +2,7 @@
 name: general
 description: General purpose subagent with all built-in tools except spawning/delegation.
 tools: +grep, +find, +ls
-model: openai-codex/gpt-6-luna
+model: sub2api/claude-haiku-5-5
 thinking: high
 ---
 
