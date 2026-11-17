@@ -8,6 +8,9 @@ Remove any existing `~/.pi/agent/AGENTS.md` and `~/.pi/agent/agents` first.
 
 ```bash
 pi install git:github.com/yuhua99/rye-agent@package
+pi install git:github.com/yuhua99/pi-quiet
+pi install git:github.com/yuhua99/pi-web
+pi install git:github.com/yuhua99/pi-usage
 R=~/.pi/agent/git/github.com/yuhua99/rye-agent
 ln -s "$R/AGENTS.md" ~/.pi/agent/AGENTS.md
 ln -s "$R/agents" ~/.pi/agent/agents
