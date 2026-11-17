@@ -1,0 +1,25 @@
+{
+  "name": "@yuhua99/rye-agent",
+  "version": "1.0.0",
+  "description": "Personal Pi setup: handoff extension, prompt templates, themes, AGENTS.md, and subagent definitions.",
+  "keywords": [
+    "pi-package"
+  ],
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-agent-core": {
+      "optional": true
+    },
+    "@earendil-works/pi-ai": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  }
+}
